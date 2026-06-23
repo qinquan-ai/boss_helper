@@ -1,5 +1,6 @@
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useEngine } from "@/stores/engine";
+import { trace } from "@/utils/debugTracer";
 
 /**
  * 所有筛选状态与派生，集中在此处供父组件 + FilterBar 共享。
@@ -58,6 +59,16 @@ export function useJobFilters() {
   const salaryMin = ref<number | null>(null);
   const salaryMax = ref<number | null>(null);
 
+  // 追踪 salaryMin/Max 写入
+  watch(
+    () => salaryMin.value,
+    (v) => trace.api("useJobFilters:salaryMin", `salaryMin 写入: ${v}`, { salaryMin: v })
+  );
+  watch(
+    () => salaryMax.value,
+    (v) => trace.api("useJobFilters:salaryMax", `salaryMax 写入: ${v}`, { salaryMax: v })
+  );
+
   const cityFilter = ref<string[]>([]);
   const experienceFilter = ref<string[]>([]);
   const degreeFilter = ref<string[]>([]);
@@ -83,7 +94,7 @@ export function useJobFilters() {
     const k = keyword.value.trim().toLowerCase();
     const min = salaryMin.value;
     const max = salaryMax.value;
-    return (engine.jobs as any[]).filter((j) => {
+    const raw = (engine.jobs as any[]).filter((j) => {
       if (!singleMatch(cityFilter.value, j.location)) return false;
       if (!singleMatch(experienceFilter.value, j.experience)) return false;
       if (!singleMatch(degreeFilter.value, j.degree)) return false;
@@ -116,6 +127,10 @@ export function useJobFilters() {
       }
       return true;
     });
+    trace.api("useJobFilters:filtered", `filtered 重算: ${raw.length} 条 (min=${min}, max=${max})`, {
+      min, max, totalJobs: engine.jobs.length, filteredCount: raw.length,
+    });
+    return raw;
   });
 
   const filteredCount = computed(() => filtered.value.length);

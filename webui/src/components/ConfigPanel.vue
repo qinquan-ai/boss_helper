@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useEngine } from "@/stores/engine";
 import { GlassSelect, GlassCheckbox, GlassToggle } from "@/ui";
 
@@ -58,6 +58,41 @@ function onOutputDirChange(e: Event) {
 const tagDisplay = computed(() =>
   engine.params.tag_sync ? engine.params.query || "(同步搜索关键词)" : engine.params.tag || ""
 );
+
+// BOSS 直聘薪资标准档位（按截图范围）
+const SALARY_RANGE_OPTIONS = [
+  { label: "不限",     value: "0-0"   },
+  { label: "3K 以下", value: "0-3"   },
+  { label: "3-5K",    value: "3-5"   },
+  { label: "5-10K",   value: "5-10"  },
+  { label: "10-20K",  value: "10-20" },
+  { label: "20-50K",  value: "20-50" },
+  { label: "50K 以上",value: "50-0"  },
+];
+
+// 从 engine.params 同步到下拉框当前值
+const salaryRangeValue = ref("0-0");
+function syncSalaryFromParams() {
+  const min = engine.params.salary_min ?? 0;
+  const max = engine.params.salary_max ?? 0;
+  salaryRangeValue.value = `${min}-${max}`;
+}
+syncSalaryFromParams();
+
+// 监听 engine.params 的变化，同步回 salaryRangeValue（避免用户改了代码里的默认值但 UI 不同步）
+watch(
+  () => [engine.params.salary_min, engine.params.salary_max],
+  () => syncSalaryFromParams()
+);
+
+// 用户改了选项时，把 min/max 写回 engine.params
+watch(salaryRangeValue, (v) => {
+  const [minStr, maxStr] = v.split("-");
+  const min = parseInt(minStr) || 0;
+  const max = parseInt(maxStr) || 0;
+  engine.params.salary_min = min === 0 ? null : min;
+  engine.params.salary_max = max === 0 ? null : max;
+});
 </script>
 
 <template>
@@ -160,28 +195,16 @@ const tagDisplay = computed(() =>
       />
     </div>
 
-    <!-- 薪资范围（初始筛选，单位 K） -->
+    <!-- 薪资范围（初始筛选，Boss 标准档位） -->
     <div>
       <label class="field-label">薪资范围 (K/月，可选)</label>
-      <div class="flex items-center gap-2">
-        <input
-          v-model.number="engine.params.salary_min"
-          type="number"
-          min="0"
-          placeholder="最低"
-          class="input"
-          :disabled="engine.running"
-        />
-        <span class="text-fg-subtle">~</span>
-        <input
-          v-model.number="engine.params.salary_max"
-          type="number"
-          min="0"
-          placeholder="最高"
-          class="input"
-          :disabled="engine.running"
-        />
-      </div>
+      <GlassSelect
+        :model-value="salaryRangeValue"
+        :options="SALARY_RANGE_OPTIONS"
+        placeholder="不限"
+        :disabled="engine.running"
+        @update:model-value="(v) => (salaryRangeValue = v)"
+      />
       <p class="text-[11px] text-fg-subtle mt-1">自动过滤；结果表可进一步筛选</p>
     </div>
 
@@ -204,7 +227,6 @@ const tagDisplay = computed(() =>
           @change="onBrowserPathChange"
         />
         <button
-          v-if="hasNativePicker"
           type="button"
           class="btn-ghost !py-1 !px-2 text-[11px] shrink-0"
           :disabled="engine.running"
@@ -275,7 +297,6 @@ const tagDisplay = computed(() =>
           @change="onOutputDirChange"
         />
         <button
-          v-if="hasNativePicker"
           type="button"
           class="btn-ghost !py-1 !px-2 text-[11px] shrink-0"
           :disabled="engine.running"

@@ -2,6 +2,22 @@ import { defineStore } from "pinia";
 import { api, type City, type EngineConfig, type Job, type StartParams } from "@/api";
 import { trace } from "@/utils/debugTracer";
 
+/** 解析薪资文本 → [min, max]（单位 K）。无法解析返回 null。 */
+function parseSalary(text?: string): [number, number] | null {
+  if (!text) return null;
+  const s = String(text);
+  if (/\/(天|时|小时)|元\/(天|时|小时)/.test(s)) return null;
+  let m = s.match(/(\d+(?:\.\d+)?)\s*[-~―]\s*(\d+(?:\.\d+)?)\s*[Kk]/);
+  if (m) return [parseFloat(m[1]), parseFloat(m[2])];
+  m = s.match(/(\d+(?:\.\d+)?)\s*万?\s*[-~―]\s*(\d+(?:\.\d+)?)\s*万/);
+  if (m) return [parseFloat(m[1]) * 10, parseFloat(m[2]) * 10];
+  m = s.match(/(\d+(?:\.\d+)?)\s*千?\s*[-~―]\s*(\d+(?:\.\d+)?)\s*千/);
+  if (m) return [parseFloat(m[1]), parseFloat(m[2])];
+  m = s.match(/(\d+(?:\.\d+)?)\s*[Kk]/);
+  if (m) return [parseFloat(m[1]), parseFloat(m[1])];
+  return null;
+}
+
 export interface LogEntry {
   id: number;
   level: string;
@@ -16,6 +32,7 @@ export interface PendingAction {
 export type EngineState =
   | "idle"
   | "running"
+  | "paused"
   | "waiting"
   | "done"
   | "stopped"
@@ -37,6 +54,7 @@ interface State {
   cities: City[];
   citiesRefreshing: boolean;
   stopping: boolean;
+  pausing: boolean;
 }
 
 let logSeq = 0;
@@ -73,6 +91,7 @@ export const useEngine = defineStore("engine", {
     cities: [],
     citiesRefreshing: false,
     stopping: false,
+    pausing: false,
   }),
 
   getters: {
@@ -85,6 +104,7 @@ export const useEngine = defineStore("engine", {
         {
           idle: "空闲",
           running: "运行中",
+          paused: "已暂停",
           waiting: "等待操作",
           done: "已完成",
           stopped: "已停止",
@@ -94,7 +114,6 @@ export const useEngine = defineStore("engine", {
     },
     canStart(s): boolean {
       if (!s.config) return false;
-      // 关键词路线下关键词必填；手动路线无此要求
       if (s.params.keyword_search) return !!(s.params.query || "").trim();
       return true;
     },
@@ -200,10 +219,9 @@ export const useEngine = defineStore("engine", {
         this.pushLog("error", `停止失败: ${e}`);
         trace.action("engine:stop", "停止失败", { error: String(e) });
       }
-      // 轮询后端线程状态作为兜底：即使 WS 事件丢失，也能让按钮可靠回到「启动」状态
       const started = Date.now();
       const poll = async () => {
-        if (!this.stopping) return; // 已被 WS 终态事件收尾
+        if (!this.stopping) return;
         if (Date.now() - started > 60000) {
           this.finishStop();
           return;
@@ -222,13 +240,45 @@ export const useEngine = defineStore("engine", {
       setTimeout(poll, 800);
     },
 
+    async pause() {
+      if (this.pausing || this.state !== "running") return;
+      this.pausing = true;
+      this.pushLog("warn", "已发送暂停指令 ...");
+      trace.startScope("collect-pause");
+      trace.action("engine:pause", "用户点击暂停", {});
+      try {
+        await api.pause();
+      } catch (e) {
+        this.pushLog("error", `暂停失败: ${e}`);
+        trace.action("engine:pause", "暂停失败", { error: String(e) });
+        this.pausing = false;
+      }
+    },
+
+    async resume() {
+      if (!this.pausing && this.state !== "paused") return;
+      this.pausing = false;
+      this.pushLog("info", "继续采集 ...");
+      trace.startScope("collect-resume");
+      trace.action("engine:resume", "用户点击继续", {});
+      try {
+        await api.resume();
+      } catch (e) {
+        this.pushLog("error", `继续失败: ${e}`);
+        trace.action("engine:resume", "继续失败", { error: String(e) });
+      }
+    },
+
     finishStop() {
       this.stopping = false;
+      this.pausing = false;
       this.running = false;
-      if (this.state === "running" || this.state === "waiting") this.state = "stopped";
+      if (this.state === "running" || this.state === "waiting" || this.state === "paused") this.state = "stopped";
       this.pendingAction = null;
       trace.endScope("collect-stop");
       trace.endScope("collect-start");
+      trace.endScope("collect-pause");
+      trace.endScope("collect-resume");
       this.loadResults();
     },
 
@@ -241,7 +291,17 @@ export const useEngine = defineStore("engine", {
     async loadResults(date?: string) {
       try {
         const r = await api.getResults(date);
-        this.jobs = r.jobs || [];
+        const jobs: Job[] = (r.jobs || []).map((j: any) => {
+          if (j.salary && (j.salaryMin == null || j.salaryMax == null)) {
+            const parsed = parseSalary(j.salary);
+            if (parsed) {
+              j.salaryMin = parsed[0];
+              j.salaryMax = parsed[1];
+            }
+          }
+          return j as Job;
+        });
+        this.jobs = jobs;
         this.resultFiles = r.files || [];
         this.currentFile = r.file;
       } catch (e) {
@@ -260,7 +320,6 @@ export const useEngine = defineStore("engine", {
       };
       ws.onclose = () => {
         this.wsConnected = false;
-        // 任务进行中则自动重连
         if (this.running) setTimeout(() => this.connectWs(), 1000);
       };
       ws.onmessage = (ev) => {
@@ -288,12 +347,25 @@ export const useEngine = defineStore("engine", {
         case "status":
           this.state = ev.state as EngineState;
           trace.action("engine:handleEvent", `状态变更: ${ev.state}`, { detail: ev.detail });
-          if (ev.state === "done" || ev.state === "stopped" || ev.state === "error") {
+          if (ev.state === "done" || ev.state === "stopped") {
             this.running = false;
             this.stopping = false;
+            this.pausing = false;
             this.loadResults();
           }
-          if (ev.state === "error" && ev.detail) this.errorMsg = String(ev.detail);
+          if (ev.state === "error") {
+            this.running = false;
+            this.stopping = false;
+            this.pausing = false;
+            if (this.stopping || String(ev.detail ?? "").includes("被停止")) {
+              this.state = "stopped";
+            }
+            this.errorMsg = String(ev.detail ?? "");
+            this.loadResults();
+          }
+          if (ev.state === "paused") {
+            this.pausing = false;
+          }
           break;
         case "need_action":
           this.pendingAction = { reason: ev.reason, kind: ev.kind || "confirm" };

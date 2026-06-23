@@ -1,6 +1,7 @@
 <!-- GlassSelect — 自定义毛玻璃下拉选择，完全可控的选中/悬停态 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
+import { trace } from "@/utils/debugTracer";
 
 interface Opt {
   label: string;
@@ -40,6 +41,7 @@ watch(open, async (v) => {
 });
 
 function pick(o: Opt) {
+  trace.api("GlassSelect:pick", `选中选项: ${o.label} (${o.value})`, {});
   emit("update:modelValue", o.value);
   open.value = false;
 }

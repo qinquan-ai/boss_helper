@@ -3,8 +3,9 @@
  * ResultTable：组合 FilterBar + JobTable + JobDetailDrawer
  * 所有筛选状态/派生集中在 useJobFilters()；本组件只负责装配与选中态。
  */
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useJobFilters } from "@/composables/useJobFilters";
+import { trace } from "@/utils/debugTracer";
 import FilterBar from "./FilterBar.vue";
 import JobTable from "./JobTable.vue";
 import JobDetailDrawer from "./JobDetailDrawer.vue";
@@ -12,31 +13,61 @@ import type { Job } from "@/api";
 
 const f = useJobFilters();
 const selected = ref<Job | null>(null);
+
+// 追踪 filtered 传给 JobTable 的时机与结果数
+watch(
+  () => f.filtered.value,
+  (newFiltered) => {
+    trace.api("ResultTable:filtered", `filtered 传给 JobTable: ${newFiltered.length} 条`, {
+      count: newFiltered.length,
+      salaryMin: f.salaryMin.value,
+      salaryMax: f.salaryMax.value,
+    });
+  }
+);
+
+// 各 filter 事件处理（抽成函数，避免 inline 表达式 TS 类型报错）
+function onKeyword(v: string) { f.keyword.value = v; }
+function onSalaryMin(v: number | null) {
+  trace.api("ResultTable:salary-min", `收到 salary-min 事件: ${v}`, {});
+  f.salaryMin.value = v;
+}
+function onSalaryMax(v: number | null) {
+  trace.api("ResultTable:salary-max", `收到 salary-max 事件: ${v}`, {});
+  f.salaryMax.value = v;
+}
+function onCityFilter(v: string[]) { f.cityFilter.value = v; }
+function onExperienceFilter(v: string[]) { f.experienceFilter.value = v; }
+function onDegreeFilter(v: string[]) { f.degreeFilter.value = v; }
+function onSkillFilter(v: string[]) { f.skillFilter.value = v; }
+function onWelfareFilter(v: string[]) { f.welfareFilter.value = v; }
+function onTagFilter(v: string[]) { f.tagFilter.value = v; }
+function onCompanyLabelFilter(v: string[]) { f.companyLabelFilter.value = v; }
 </script>
 
 <template>
   <div class="result-table-root flex flex-col h-full overflow-hidden">
     <FilterBar
       :keyword="f.keyword.value"
-      @update:keyword="(v) => (f.keyword.value = v)"
+      @update:keyword="onKeyword"
       :salary-min="f.salaryMin.value"
-      @update:salary-min="(v) => (f.salaryMin.value = v)"
+      @update:salary-min="onSalaryMin"
       :salary-max="f.salaryMax.value"
-      @update:salary-max="(v) => (f.salaryMax.value = v)"
+      @update:salary-max="onSalaryMax"
       :city-filter="f.cityFilter.value"
-      @update:city-filter="(v) => (f.cityFilter.value = v)"
+      @update:city-filter="onCityFilter"
       :experience-filter="f.experienceFilter.value"
-      @update:experience-filter="(v) => (f.experienceFilter.value = v)"
+      @update:experience-filter="onExperienceFilter"
       :degree-filter="f.degreeFilter.value"
-      @update:degree-filter="(v) => (f.degreeFilter.value = v)"
+      @update:degree-filter="onDegreeFilter"
       :skill-filter="f.skillFilter.value"
-      @update:skill-filter="(v) => (f.skillFilter.value = v)"
+      @update:skill-filter="onSkillFilter"
       :welfare-filter="f.welfareFilter.value"
-      @update:welfare-filter="(v) => (f.welfareFilter.value = v)"
+      @update:welfare-filter="onWelfareFilter"
       :tag-filter="f.tagFilter.value"
-      @update:tag-filter="(v) => (f.tagFilter.value = v)"
+      @update:tag-filter="onTagFilter"
       :company-label-filter="f.companyLabelFilter.value"
-      @update:company-label-filter="(v) => (f.companyLabelFilter.value = v)"
+      @update:company-label-filter="onCompanyLabelFilter"
       :city-options="f.cityOptions.value"
       :experience-options="f.experienceOptions.value"
       :degree-options="f.degreeOptions.value"

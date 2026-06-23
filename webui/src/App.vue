@@ -15,6 +15,10 @@ const engine = useEngine();
 const { mode, toggle } = useTheme();
 const isDev = import.meta.env.DEV;
 const tab = ref<"logs" | "results" | "ui">("logs");
+const configWidth = useLocalStorage<number>("boss:config-width", 300, {
+  validator: (v) => typeof v === "number" && v >= 220 && v<= 500,
+});
+
 
 // ConfigPanel 折叠偏好（跨刷新 / 跨标签同步）
 const configCollapsed = useLocalStorage<boolean>(

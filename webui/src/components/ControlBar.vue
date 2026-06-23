@@ -5,7 +5,6 @@ import { useLocalStorage } from "@/composables/useLocalStorage";
 
 const engine = useEngine();
 
-// 统计区折叠偏好（跨刷新 / 跨标签同步）；默认折叠——多数时间用不到这 6 个数字
 const statsCollapsed = useLocalStorage<boolean>(
   "boss:stats-collapsed",
   true,
@@ -19,6 +18,7 @@ const stateColor = computed(
     ({
       idle: "bg-fg-subtle",
       running: "bg-brand animate-pulse-ring",
+      paused: "bg-amber-500 animate-pulse-ring",
       waiting: "bg-amber-500 animate-pulse-ring",
       done: "bg-emerald-500",
       stopped: "bg-fg-subtle",
@@ -49,7 +49,6 @@ const metrics = [
 
       <div class="flex-1"></div>
 
-      <!-- 折叠/展开统计区：参考 video_workflow 时间轴的"展开/隐藏"小药丸 -->
       <button
         type="button"
         class="w-7 h-7 rounded-full flex items-center justify-center transition-fast bg-white/5 hover:bg-white/10 text-fg-muted hover:text-fg"
@@ -58,7 +57,6 @@ const metrics = [
         :aria-expanded="!statsCollapsed"
         @click="statsCollapsed = !statsCollapsed"
       >
-        <!-- chevron-down = 当前展开（点它会折叠）；chevron-up = 当前折叠（点它会展开） -->
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="16"
@@ -77,15 +75,50 @@ const metrics = [
         </svg>
       </button>
 
+      <!-- 暂停 / 继续（仅运行中可见） -->
+      <template v-if="engine.running && engine.state !== 'paused'">
+        <button
+          v-if="engine.pausing"
+          class="btn-ghost opacity-60 cursor-not-allowed"
+          disabled
+        >
+          暂停中…
+        </button>
+        <button
+          v-else
+          class="btn-ghost"
+          :disabled="!engine.running"
+          title="暂停采集，可稍后继续"
+          @click="engine.pause()"
+        >
+          ⏸ 暂停
+        </button>
+      </template>
+
+      <!-- 继续（暂停时可见） -->
       <button
-        v-if="engine.stopping"
-        class="btn-danger opacity-60 cursor-not-allowed"
-        disabled
+        v-if="engine.state === 'paused'"
+        class="btn-primary"
+        title="继续采集"
+        @click="engine.resume()"
       >
-        ■ 停止中…
+        ▶ 继续
       </button>
+
+      <!-- 停止（运行中或暂停时可见） -->
       <button
-        v-else-if="!engine.running"
+        v-if="engine.running || engine.state === 'paused'"
+        class="btn-danger"
+        :disabled="engine.stopping"
+        :class="{ 'opacity-60 cursor-not-allowed': engine.stopping }"
+        @click="engine.stop()"
+      >
+        {{ engine.stopping ? '■ 停止中…' : '■ 停止' }}
+      </button>
+
+      <!-- 启动（仅空闲时可见） -->
+      <button
+        v-if="!engine.running && engine.state !== 'paused'"
         class="btn-primary"
         :disabled="!engine.canStart"
         :title="
@@ -97,7 +130,6 @@ const metrics = [
       >
         ▶ 启动助手
       </button>
-      <button v-else class="btn-danger" @click="engine.stop()">■ 停止</button>
     </div>
 
     <!-- 进度条 -->
@@ -114,7 +146,7 @@ const metrics = [
       </div>
     </div>
 
-    <!-- 统计区：可折叠（参考时间轴 h-0 + opacity-0 的折叠方式） -->
+    <!-- 统计区：可折叠 -->
     <div
       class="grid transition-all duration-300 ease-out"
       :class="statsCollapsed

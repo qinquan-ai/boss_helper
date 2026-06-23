@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from src.config import get_config, save_config
 from src.core.cities import get_cities, refresh_from_browser
-# src.announcement / src.sponsor / src.version_checker 已移除（商业化 + 自动更新功能）
+
 
 from .session import session
 from .debug_tracer import debug_tracer
@@ -117,6 +117,18 @@ def api_start(params: StartParams):
 @app.post("/api/stop")
 def api_stop():
     session.stop()
+    return {"ok": True}
+
+
+@app.post("/api/pause")
+def api_pause():
+    session.pause()
+    return {"ok": True}
+
+
+@app.post("/api/resume")
+def api_resume():
+    session.resume()
     return {"ok": True}
 
 

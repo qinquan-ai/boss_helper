@@ -1,4 +1,4 @@
-"""单任务会话管理：同一时间只允许一个分析任务在工作线程中运行。"""
+"""单任务会话管理。"""
 import threading
 
 from src.control import GuiController
@@ -42,6 +42,16 @@ class Session:
         if self.controller:
             debug_tracer.entry("session.py:stop", "停止运行", {}, scope="collect-stop")
             self.controller.request_stop()
+
+    def pause(self):
+        if self.controller:
+            debug_tracer.entry("session.py:pause", "暂停任务", {}, scope="collect-start")
+            self.controller.request_pause()
+
+    def resume(self):
+        if self.controller:
+            debug_tracer.entry("session.py:resume", "继续任务", {}, scope="collect-start")
+            self.controller.request_resume()
 
     def ack(self, payload: str = ""):
         if self.controller:

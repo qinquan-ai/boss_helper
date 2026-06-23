@@ -1,17 +1,4 @@
-"""助手引擎控制器抽象。
-
-引擎（collector.run_collection）不再直接 print/input，而是通过 Controller：
-  - log()        输出日志
-  - progress()   汇报进度与统计
-  - status()     汇报运行状态
-  - wait_user()  替代 input()，阻塞直到用户放行（返回用户输入文本）
-  - should_stop() 循环内检查，支持中途停止
-
-CLI 用 ConsoleController（保持原有 print/input 行为），
-GUI 用 GuiController（事件入队 + 线程事件等待，由 FastAPI 桥接到 WebSocket）。
-
-Debug tracing via server.debug_tracer (lazy import to avoid circular imports).
-"""
+"""助手引擎控制器抽象。"""
 import queue
 import threading
 
@@ -27,16 +14,16 @@ class BaseController:
         pass
 
     def wait_user(self, reason, kind="confirm"):
-        """阻塞等待用户操作，返回用户输入的文本（可为空字符串）。"""
         return ""
 
     def should_stop(self) -> bool:
         return False
 
+    def should_pause(self) -> bool:
+        return False
+
 
 class ConsoleController(BaseController):
-    """命令行控制器：保持项目原有的 print / input 行为。"""
-
     def log(self, msg="", level="info", end="\n"):
         print(msg, end=end, flush=True)
 
@@ -51,18 +38,16 @@ class ConsoleController(BaseController):
 
 
 class GuiController(BaseController):
-    """GUI 控制器：把事件放入线程安全队列，阻塞等待前端 ack/stop。"""
-
     def __init__(self):
         self.events: "queue.Queue[dict]" = queue.Queue()
         self._stop = threading.Event()
+        self._paused = threading.Event()     # set() = 已暂停，clear() = 运行中
         self._resume = threading.Event()
         self._action_payload = ""
         self.latest_progress = {"done": 0, "total": 0, "stats": {}}
         self.state = "idle"
-        self.pending_action = None  # 当前等待中的人工介入 {reason, kind}
+        self.pending_action = None
 
-    # ---------- 生产者侧：引擎线程调用 ----------
     def log(self, msg="", level="info", end="\n"):
         text = str(msg)
         if not text.strip() and end == "":
@@ -89,10 +74,12 @@ class GuiController(BaseController):
         self._action_payload = ""
         self.pending_action = {"reason": reason, "kind": kind}
         self.events.put({"type": "need_action", "reason": reason, "kind": kind})
-        # 阻塞直到前端 ack 或请求停止
         while not self._resume.is_set():
             if self._stop.is_set():
                 break
+            if self._paused.is_set():
+                self._paused.wait(0.2)
+                continue
             self._resume.wait(0.2)
         self.pending_action = None
         return self._action_payload
@@ -100,17 +87,45 @@ class GuiController(BaseController):
     def should_stop(self) -> bool:
         return self._stop.is_set()
 
-    # ---------- 消费者侧：FastAPI 线程调用 ----------
+    def should_pause(self) -> bool:
+        return self._paused.is_set()
+
+    def _wait_paused(self):
+        import server.debug_tracer as dt
+        dt.debug_tracer.internal("control.py:GuiController._wait_paused", "已进入暂停状态，等待继续 ...", {}, scope="collect-start")
+        while True:
+            if self._stop.is_set():
+                dt.debug_tracer.internal("control.py:GuiController._wait_paused", "暂停中收到停止信号，退出", {}, scope="collect-start")
+                return
+            if not self._paused.is_set():
+                dt.debug_tracer.internal("control.py:GuiController._wait_paused", "收到继续信号，恢复运行", {}, scope="collect-start")
+                return
+            self._paused.wait(0.2)
+
     def request_stop(self):
         self._stop.set()
-        self._resume.set()  # 解除任何 wait_user 阻塞
+        self._resume.set()
+        self._paused.clear()
+
+    def request_pause(self):
+        if not self._stop.is_set():
+            import server.debug_tracer as dt
+            dt.debug_tracer.internal("control.py:GuiController.request_pause", "收到暂停请求", {}, scope="collect-start")
+            self._paused.set()
+            self.status("paused")
+
+    def request_resume(self):
+        if self._paused.is_set():
+            import server.debug_tracer as dt
+            dt.debug_tracer.internal("control.py:GuiController.request_resume", "收到继续请求", {}, scope="collect-start")
+        self._paused.clear()
+        self.status("running")
 
     def ack_user(self, payload=""):
         self._action_payload = payload or ""
         self._resume.set()
 
     def drain(self):
-        """取出当前队列中的全部事件（非阻塞）。"""
         items = []
         while True:
             try:

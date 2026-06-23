@@ -6,6 +6,7 @@
 import { computed, ref, watch } from "vue";
 import { useEngine } from "@/stores/engine";
 import { GlassTag } from "@/ui";
+import { trace } from "@/utils/debugTracer";
 import type { Job } from "@/api";
 
 // ============================================================================
@@ -61,6 +62,44 @@ function parseSalary(text?: string): [number, number] | null {
 const props = defineProps<{ jobs: Job[] }>();
 const emit = defineEmits<{ (e: "select", j: Job): void }>();
 const engine = useEngine();
+
+// 追踪 props.jobs 长度变化
+watch(
+  () => props.jobs,
+  (newJobs) => {
+    trace.api("JobTable:jobs", `props.jobs 更新: ${newJobs.length} 条`, { count: newJobs.length });
+  }
+);
+
+// 追踪 sortedJobs computed 重算
+let prevSortedLen = 0;
+const sortedJobs = computed(() => {
+  const result = !sortKey.value || !sortDir.value
+    ? props.jobs
+    : (() => {
+        const col = COLUMNS.find((c) => c.key === sortKey.value);
+        if (!col?.sortKey) return props.jobs;
+        const key = col.sortKey;
+        const dir = sortDir.value === "asc" ? 1 : -1;
+        return [...props.jobs].sort((a, b) => {
+          const va = key(a);
+          const vb = key(b);
+          if (va == null && vb == null) return 0;
+          if (va == null) return 1;
+          if (vb == null) return -1;
+          if (va < vb) return -1 * dir;
+          if (va > vb) return 1 * dir;
+          return 0;
+        });
+      })();
+  if (result.length !== prevSortedLen) {
+    trace.api("JobTable:sortedJobs", `sortedJobs 重算: ${result.length} 条 (props.jobs=${props.jobs.length})`, {
+      count: result.length, propsCount: props.jobs.length,
+    });
+    prevSortedLen = result.length;
+  }
+  return result;
+});
 
 // ============================================================================
 // 列显隐 + 列宽（响应式 + localStorage 持久化）
@@ -215,24 +254,6 @@ function clickHeader(col: ColumnDef) {
     sortDir.value = null;
   }
 }
-
-const sortedJobs = computed(() => {
-  if (!sortKey.value || !sortDir.value) return props.jobs;
-  const col = COLUMNS.find((c) => c.key === sortKey.value);
-  if (!col?.sortKey) return props.jobs;
-  const key = col.sortKey;
-  const dir = sortDir.value === "asc" ? 1 : -1;
-  return [...props.jobs].sort((a, b) => {
-    const va = key(a);
-    const vb = key(b);
-    if (va == null && vb == null) return 0;
-    if (va == null) return 1;
-    if (vb == null) return -1;
-    if (va < vb) return -1 * dir;
-    if (va > vb) return 1 * dir;
-    return 0;
-  });
-});
 
 // ============================================================================
 // CSV 导出

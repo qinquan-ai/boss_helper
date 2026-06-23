@@ -28,12 +28,16 @@ def _safe_tag(text):
 
 
 def _interruptible_sleep(ctrl, seconds):
-    """可被停止指令中断的 sleep：避免安全模式的长延迟拖慢停止响应。"""
+    """可被停止/暂停指令中断的 sleep。"""
     end = time.time() + seconds
     while True:
         remaining = end - time.time()
         if remaining <= 0 or ctrl.should_stop():
             return
+        if ctrl.should_pause():
+            ctrl._wait_paused()
+            if ctrl.should_stop():
+                return
         time.sleep(min(0.2, remaining))
 
 
@@ -526,6 +530,10 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
     while success_count < count:
         if ctrl.should_stop():
             break
+        if ctrl.should_pause():
+            ctrl._wait_paused()
+            if ctrl.should_stop():
+                break
 
         prev_success_count = success_count
 
@@ -534,7 +542,7 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
         if not jobs:
             ctrl.log("   [*] 页面上未探测到岗位，尝试向下滚动加载 ...")
             behavior.auto_scroll_list(browser)
-            time.sleep(2)
+            _interruptible_sleep(ctrl, 2)
             # 再次检查
             jobs = VueExtractor.extract(browser)
             if not jobs:
@@ -555,6 +563,10 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
                 break
             if ctrl.should_stop():
                 break
+            if ctrl.should_pause():
+                ctrl._wait_paused()
+                if ctrl.should_stop():
+                    break
 
             sid = job_meta.get("securityId")
             if not sid or sid in processed_sids:
@@ -669,7 +681,7 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
         if success_count == prev_success_count and not ctrl.should_stop():
             ctrl.log(f"   [*] 本批已处理完，滚动加载更多 ...")
             behavior.auto_scroll_list(browser)
-            time.sleep(2)
+            _interruptible_sleep(ctrl, 2)
 
     # ===== Step 5: 总结 =====
     stopped = ctrl.should_stop()

@@ -59,3 +59,6 @@ build/
 # PyInstaller 自动生成的中间 .spec 忽略，但手写的 boss.spec 必须入库
 *.spec
 !boss.spec
+
+#docs
+docs/git

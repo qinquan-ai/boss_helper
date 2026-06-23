@@ -75,6 +75,8 @@ export const api = {
       body: JSON.stringify(params),
     }),
   stop: () => jsonFetch<{ ok: boolean }>("/api/stop", { method: "POST" }),
+  pause: () => jsonFetch<{ ok: boolean }>("/api/pause", { method: "POST" }),
+  resume: () => jsonFetch<{ ok: boolean }>("/api/resume", { method: "POST" }),
   getStatus: () =>
     jsonFetch<{ running: boolean; state: string; progress: any; pending_action: any }>(
       "/api/status"

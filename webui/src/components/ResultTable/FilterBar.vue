@@ -6,6 +6,7 @@
 import { computed, ref } from "vue";
 import { useEngine } from "@/stores/engine";
 import { GlassSelect } from "@/ui";
+import { trace } from "@/utils/debugTracer";
 import ChipGroup from "./ChipGroup.vue";
 
 const props = defineProps<{
@@ -57,6 +58,34 @@ function refresh() {
   engine.loadResults();
 }
 
+// BOSS 直聘薪资标准档位（按截图范围）
+const SALARY_RANGE_OPTIONS = [
+  { label: "不限",     value: "0-0"   },
+  { label: "3K 以下", value: "0-3"   },
+  { label: "3-5K",    value: "3-5"   },
+  { label: "5-10K",   value: "5-10"  },
+  { label: "10-20K",  value: "10-20" },
+  { label: "20-50K",  value: "20-50" },
+  { label: "50K 以上",value: "50-0"  }, // 50-0 = 下限 50，无上限
+];
+
+// 把 props.salaryMin/Max 反推成下拉框当前选中值
+const salaryRangeValue = computed(() => {
+  const min = props.salaryMin ?? 0;
+  const max = props.salaryMax ?? 0;
+  return `${min}-${max}`;
+});
+
+// 用户选了新档位时，把 value 拆回 min/max 发给父组件
+function onSalaryRangeChange(v: string) {
+  trace.api("FilterBar:onSalaryRangeChange", `薪资下拉选中: ${v}`, { salaryMin: props.salaryMin, salaryMax: props.salaryMax });
+  const [minStr, maxStr] = v.split("-");
+  const min = parseInt(minStr) || 0;
+  const max = parseInt(maxStr) || 0;
+  emit("update:salaryMin", min === 0 ? null : min);
+  emit("update:salaryMax", max === 0 ? null : max);
+}
+
 // chips 行折叠状态（仅控制下方 chips 行的展开/收起，不影响上方工具栏）
 const chipsExpanded = ref(true);
 </script>
@@ -79,23 +108,17 @@ const chipsExpanded = ref(true);
 
     <div class="flex-1"></div>
 
-    <!-- 薪资范围 -->
+    <!-- 薪资范围（Boss 直聘标准档位） -->
     <div class="flex items-center gap-1 text-xs text-fg-subtle">
       <span>薪资</span>
-      <input
-        type="number" min="0" placeholder="最低"
-        :value="props.salaryMin ?? ''"
-        @input="emit('update:salaryMin', ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
-        class="input !w-16 !py-1.5 text-xs"
-      />
-      <span>~</span>
-      <input
-        type="number" min="0" placeholder="最高"
-        :value="props.salaryMax ?? ''"
-        @input="emit('update:salaryMax', ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
-        class="input !w-16 !py-1.5 text-xs"
-      />
-      <span>K</span>
+      <div class="w-28">
+        <GlassSelect
+          :model-value="salaryRangeValue"
+          :options="SALARY_RANGE_OPTIONS"
+          placeholder="不限"
+          @update:model-value="onSalaryRangeChange"
+        />
+      </div>
     </div>
 
     <input
