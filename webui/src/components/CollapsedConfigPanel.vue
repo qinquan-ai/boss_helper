@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 折叠态下的 ConfigPanel 替代品：
- * - 64px 宽的 icon 抽屉（参考 video-workflow 的 Sidebar 风格）
+ * - 64px 宽的 icon 抽屉（参考常见的侧边栏折叠风格）
  * - 中心一个展开按钮 + 配置 icon
  * - 不渲染任何配置项，DOM 极轻
  */
