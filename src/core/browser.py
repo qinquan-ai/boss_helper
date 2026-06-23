@@ -8,6 +8,12 @@ import websocket
 from src.config import CONFIG
 
 
+def _dt(fn: str, msg: str, data: dict | None = None):
+    """写入 debug_tracer（延迟导入避免循环依赖）。"""
+    from server.debug_tracer import debug_tracer
+    debug_tracer.internal(f"browser.py:{fn}", msg, data or {})
+
+
 class StopError(Exception):
     """表示分析被外部要求停止（Ctrl+C 或前端停止按钮），不等 CDP 超时直接放弃。"""
     pass
@@ -159,17 +165,33 @@ class BrowserManager:
 
     def connect_ws(self, ws_url):
         """连接 WebSocket（不 enable 任何 Domain）"""
-        self.ws = websocket.create_connection(ws_url, timeout=15)
-        self.ws.sock.settimeout(None)
-        return self.ws is not None
+        _dt("connect_ws", "connecting", {"ws_url": ws_url[:60] if ws_url else ""})
+        try:
+            self.ws = websocket.create_connection(ws_url, timeout=15)
+            self.ws.sock.settimeout(None)
+            _dt("connect_ws", "connected", {"ws_url": ws_url[:60] if ws_url else ""})
+            return self.ws is not None
+        except websocket.WebSocketTimeoutException as exc:
+            _dt("connect_ws", "timeout", {"ws_url": ws_url[:60], "exc": str(exc)})
+            raise TimeoutError(f"WebSocket 连接超时 ({ws_url[:40]})") from exc
+        except Exception as exc:
+            _dt("connect_ws", "failed", {"exc_type": type(exc).__name__, "exc": str(exc)})
+            raise
 
     def evaluate(self, expression, await_promise=False, timeout=30):
         """发送 Runtime.evaluate -- 唯一使用的 CDP 命令"""
-        return self.send_cdp("Runtime.evaluate", {
-            "expression": expression,
-            "returnByValue": True,
-            "awaitPromise": await_promise
-        }, timeout=timeout)
+        _dt("evaluate", "send", {"expr": expression[:80], "await": await_promise, "timeout": timeout})
+        try:
+            result = self.send_cdp("Runtime.evaluate", {
+                "expression": expression,
+                "returnByValue": True,
+                "awaitPromise": await_promise
+            }, timeout=timeout)
+            _dt("evaluate", "ok", {"expr": expression[:80]})
+            return result
+        except Exception as exc:
+            _dt("evaluate", "exception", {"exc_type": type(exc).__name__, "exc": str(exc), "expr": expression[:80]})
+            raise
 
     def send_cdp(self, method, params=None, timeout=30, stop_check=None):
         """发送一条 CDP 命令并等待匹配 id 的响应。
@@ -183,6 +205,7 @@ class BrowserManager:
         每 recv() 片（最多 2 秒）调用一次；返回 True 则抛出 StopError 放弃当前
         命令，让分析线程有机会响应 Ctrl+C / 前端停止按钮。
         """
+        _dt("send_cdp", "send", {"method": method, "params_keys": list((params or {}).keys()), "timeout": timeout})
         cmd_id = random.randint(1000, 9999)
         cmd = {
             "id": cmd_id,
@@ -197,13 +220,16 @@ class BrowserManager:
                 if deadline is not None:
                     remaining = deadline - time.time()
                     if remaining <= 0:
-                        raise TimeoutError(f"CDP {method} 响应超时")
+                        exc = TimeoutError(f"CDP {method} 响应超时")
+                        _dt("send_cdp", "timeout", {"method": method, "elapsed": timeout})
+                        raise exc
                     chunk_timeout = min(chunk_timeout, remaining)
                 # 默认用 self.should_stop（由 collector 注入），没有则允许继续
                 if stop_check is None:
                     _cb = getattr(self, "should_stop", None)
                     stop_check = _cb if _cb is not None else lambda: False
                 if stop_check():
+                    _dt("send_cdp", "stopped", {"method": method})
                     raise StopError(f"CDP {method} 被停止")
                 try:
                     self.ws.sock.settimeout(chunk_timeout)
@@ -214,10 +240,12 @@ class BrowserManager:
                     continue
                 except Exception as exc:
                     if deadline is not None and time.time() >= deadline:
+                        _dt("send_cdp", "deadline_exc", {"method": method, "exc": str(exc)})
                         raise TimeoutError(f"CDP {method} 响应超时") from exc
                     raise
                 result = json.loads(raw)
                 if result.get("id") == cmd_id:
+                    _dt("send_cdp", "ok", {"method": method})
                     return result
         finally:
             try:

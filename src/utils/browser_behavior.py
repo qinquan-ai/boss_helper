@@ -5,6 +5,12 @@ import json
 from src.core.js_loader import load_js
 
 
+def _dt(fn: str, msg: str, data: dict | None = None):
+    """写入 debug_tracer（延迟导入避免循环依赖）。"""
+    from server.debug_tracer import debug_tracer
+    debug_tracer.internal(f"browser_behavior.py:{fn}", msg, data or {})
+
+
 class BrowserBehavior:
     """浏览器交互行为封装：点击卡片、滚动、间隔延迟。"""
 
@@ -30,9 +36,9 @@ class BrowserBehavior:
         """
         sid_e = security_id.replace("\\", "\\\\").replace("'", "\\'")
 
-        # === 方式1: Vue clickJobCard()（优先，与数据读取层一致）===
+        _dt("click_job", "vue_try", {"sid": security_id[:30]})
         vue_js = load_js("click_vue.js", {"'__SID__'": f"'{sid_e}'"})
-        r = chrome.evaluate(vue_js, await_promise=True)
+        r = chrome.evaluate(vue_js, await_promise=False)
         raw = chrome.get_value(r)
         if isinstance(raw, str):
             try:
@@ -43,11 +49,12 @@ class BrowserBehavior:
             info = raw if raw is not None else {}
         if isinstance(info, dict) and info.get("ok"):
             time.sleep(0.5)
+            _dt("click_job", "vue_hit", {"index": info.get("index"), "total": info.get("total")})
             return True, info.get("index", 0), info.get("total", 0)
 
-        # === 方式2: DOM card.click()（兜底）===
+        _dt("click_job", "dom_try", {"sid": security_id[:30]})
         dom_js = load_js("click_dom.js", {"'__SID__'": f"'{sid_e}'"})
-        r = chrome.evaluate(dom_js, await_promise=True)
+        r = chrome.evaluate(dom_js, await_promise=False)
         raw = chrome.get_value(r)
         if isinstance(raw, str):
             info = json.loads(raw or "{}")
@@ -55,8 +62,10 @@ class BrowserBehavior:
             info = raw if raw is not None else {}
         if info.get("found"):
             time.sleep(0.5)
+            _dt("click_job", "dom_hit", {"index": info.get("index"), "total": info.get("total")})
             return True, info.get("index", 0), info.get("total", 0)
 
+        _dt("click_job", "not_found", {"sid": security_id[:30], "total": info.get("total", 0)})
         return False, -1, info.get("total", 0)
 
     @staticmethod
@@ -67,22 +76,46 @@ class BrowserBehavior:
     @staticmethod
     def get_scroll_position(chrome):
         """获取当前左侧列表的滚动位置（调试用）"""
-        result = chrome.evaluate(load_js("scroll_position.js"))
-        raw = chrome.get_value(result)
-        if isinstance(raw, str):
-            return json.loads(raw or "{}")
-        return raw if raw is not None else {}
+        _dt("get_scroll_position", "call", {})
+        try:
+            result = chrome.evaluate(load_js("scroll_position.js"))
+            raw = chrome.get_value(result)
+            if isinstance(raw, str):
+                data = json.loads(raw or "{}")
+            else:
+                data = raw if raw is not None else {}
+            _dt("get_scroll_position", "ok", data)
+            return data
+        except Exception as exc:
+            _dt("get_scroll_position", "exception", {"exc_type": type(exc).__name__, "exc": str(exc)})
+            raise
 
     @staticmethod
     def scroll_detail(chrome):
         """滚动浏览右侧详情面板"""
-        chrome.evaluate(load_js("scroll_detail.js"))
+        _dt("scroll_detail", "call", {})
+        try:
+            chrome.evaluate(load_js("scroll_detail.js"))
+            _dt("scroll_detail", "ok", {})
+        except Exception as exc:
+            _dt("scroll_detail", "exception", {"exc_type": type(exc).__name__, "exc": str(exc)})
+            raise
 
     @staticmethod
     def auto_scroll_list(chrome):
         """列表为空时触发懒加载：向下滚动一段距离，激活 BOSS 原生无限滚动加载"""
-        chrome.evaluate(load_js("scroll_list.js"), await_promise=True)
-        time.sleep(2.0)
+        _dt("auto_scroll_list", "start", {})
+        try:
+            # 不用 await_promise=True：滚动 JS 里 async 触发 XHR 懒加载，
+            # CDP 若等 Promise resolve，网络慢时会直接断开连接导致误判。
+            # 这里只关心是否抛异常，不关心返回值。
+            result = chrome.evaluate(load_js("scroll_list.js"), await_promise=False)
+            raw = chrome.get_value(result)
+            _dt("auto_scroll_list", "ok", {"raw": str(raw)[:100]})
+        except Exception as exc:
+            _dt("auto_scroll_list", "exception", {"exc_type": type(exc).__name__, "exc": str(exc)})
+            raise
+        time.sleep(0.5)
 
     @staticmethod
     def step_break():

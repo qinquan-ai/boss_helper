@@ -100,6 +100,57 @@ def save_config(browser_type="chrome", browser_path=None, output_dir=None):
         return False
 
 
+# ── StartParams 持久化 ──────────────────────────────────────────────────────────
+
+def load_start_params() -> dict:
+    """从 config.yaml 读取已保存的运行参数，缺失字段用默认值。"""
+    cfg = _read_yaml()
+    saved = cfg.get("start_params", {})
+    defaults = {
+        "count": 20,
+        "browser_type": "chrome",
+        "safe_mode": True,
+        "fast": False,
+        "new_chrome": False,
+        "tag": None,
+        "keyword_search": True,
+        "query": "",
+        "city_code": None,
+        "city_name": None,
+        "salary_min": None,
+        "salary_max": None,
+        "tag_sync": True,
+    }
+    result = defaults.copy()
+    for k, v in saved.items():
+        if k in result:
+            result[k] = v
+    return result
+
+
+def save_start_params(params: dict) -> bool:
+    """把运行参数写入 config.yaml（保留其他区段不动）。"""
+    try:
+        import yaml
+    except Exception:
+        return False
+    cfg = _read_yaml()
+    # 只写已知字段，避免污染
+    allowed = {
+        "count", "browser_type", "safe_mode", "fast", "new_chrome",
+        "tag", "keyword_search", "query", "city_code", "city_name",
+        "salary_min", "salary_max", "tag_sync",
+    }
+    filtered = {k: v for k, v in params.items() if k in allowed}
+    cfg["start_params"] = filtered
+    try:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False)
+        return True
+    except Exception:
+        return False
+
+
 # 提供一个便捷函数来获取配置，而不是直接导出静态 CONFIG
 def get_config(browser_type="chrome"):
     return load_config(browser_type)

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from src.config import get_config, save_config
+from src.config import get_config, save_config, load_start_params, save_start_params
 from src.core.cities import get_cities, refresh_from_browser
 
 
@@ -88,6 +88,19 @@ def api_save_config(body: ConfigBody):
     }
 
 
+@app.get("/api/start-params")
+def api_get_start_params():
+    """返回已保存的运行参数（从 config.yaml 读取）。"""
+    return load_start_params()
+
+
+@app.post("/api/start-params")
+def api_save_start_params(body: dict):
+    """保存运行参数到 config.yaml。"""
+    ok = save_start_params(body)
+    return {"ok": ok}
+
+
 @app.get("/api/cities")
 def api_get_cities():
     """返回城市列表（内置常用城市，缓存优先）。"""
@@ -150,9 +163,9 @@ def api_status():
 
 
 @app.get("/api/results")
-def api_results(date: str | None = None):
+def api_results(date: str | None = None, output_dir: str | None = None):
     cfg = get_config("chrome")
-    out = cfg.get("output_dir", "")
+    out = output_dir if output_dir else cfg.get("output_dir", "")
     files = sorted(glob.glob(os.path.join(out, "jobs_*.json")), reverse=True)
     if not files:
         return {"jobs": [], "file": None, "files": []}

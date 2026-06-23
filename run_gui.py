@@ -12,6 +12,7 @@
 多实例并行启动时自动错开端口，互不冲突。
 """
 import argparse
+import ctypes
 import os
 import shutil
 import socket
@@ -252,6 +253,7 @@ class _PickApi:
         self._window = None
         self._webview = None
 
+    # ── 文件选择 ───────────────────────────────────────────────
     def pick_folder(self):
         try:
             res = self._window.create_file_dialog(self._webview.FOLDER_DIALOG)
@@ -271,6 +273,36 @@ class _PickApi:
         except Exception:
             pass
         return ""
+
+    # ── 通知 ───────────────────────────────────────────────────
+    def flash_taskbar(self, count=6):
+        """任务栏图标闪烁（Windows 原生，无需额外依赖）。"""
+        try:
+            from src.notify import flash_taskbar as _flash
+            _flash(count=count)
+        except Exception:
+            pass
+
+    def stop_flash(self):
+        """停止任务栏闪烁。"""
+        try:
+            from src.notify import stop_flash_taskbar
+            stop_flash_taskbar()
+        except Exception:
+            pass
+
+    def play_sound(self, kind="alert"):
+        """通过 Web Audio API 在前端播放提示音。
+        kind: 'alert' | 'done' | 'error'
+        前端会拦截 window.pywebview.api.play_sound() 并播放对应音频。
+        """
+        # 这里通过 evaluate_js 让前端播放声音（前端已注册全局回调）
+        try:
+            self._window.evaluate_js(
+                f"window.__playSound && window.__playSound({repr(kind)})"
+            )
+        except Exception:
+            pass
 
 
 def _find_all_boss_procs() -> list[int]:
@@ -416,6 +448,14 @@ def _main_impl():
             window.evaluate_js(
                 "document.addEventListener('contextmenu', e => e.preventDefault());"
             )
+        except Exception:
+            pass
+
+        # 注入系统窗口句柄，让通知模块能闪烁任务栏
+        try:
+            from src.notify import set_window_hwnd
+            hwnd = ctypes.windll.user32.GetActiveWindow()
+            set_window_hwnd(hwnd)
         except Exception:
             pass
 

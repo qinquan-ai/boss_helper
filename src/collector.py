@@ -27,6 +27,32 @@ def _safe_tag(text):
     return cleaned or None
 
 
+def _append_location_tag(tag, city_name, salary_min, salary_max):
+    """在已有 tag 后面追加城市和薪资范围，格式：_城市_薪资K"""
+    parts = []
+    if city_name:
+        parts.append(_safe_tag(city_name))
+    if salary_min is not None or salary_max is not None:
+        if salary_min and salary_max:
+            parts.append(f"{salary_min}-{salary_max}K")
+        elif salary_min:
+            parts.append(f"{salary_min}K+")
+        elif salary_max:
+            parts.append(f"upTo{salary_max}K")
+    if not parts:
+        return tag
+    suffix = "_".join(parts)
+    return f"{tag}_{suffix}" if tag else suffix
+
+
+def _build_output_tag(query, city_name, salary_min, salary_max):
+    """生成完整的文件名前缀，包含关键词+城市+薪资范围。"""
+    parts = []
+    if query:
+        parts.append(_safe_tag(query))
+    return _append_location_tag("_".join(parts) or None, city_name, salary_min, salary_max)
+
+
 def _interruptible_sleep(ctrl, seconds):
     """可被停止/暂停指令中断的 sleep。"""
     end = time.time() + seconds
@@ -215,10 +241,6 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
         query = ""
     keyword_mode = bool(query)
 
-    # 勾选「同步搜索关键词」时，输出文件标记 = 搜索关键词
-    if tag_sync and query:
-        tag = _safe_tag(query)
-
     # 动态获取配置
     config = get_config(browser_type)
 
@@ -229,9 +251,16 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
     ctrl.log(f"   目标: {count} 条 | 模式: {mode_str}")
     ctrl.log("=" * 60)
 
+    # 确定文件名前缀：自定义 tag > query 关键词
+    base_tag = tag if tag else (_safe_tag(query) if query else None)
+
+    # 统一追加城市+薪资范围
+    out_tag = _append_location_tag(base_tag, city_name, salary_min, salary_max)
+    ctrl.log(f"   输出前缀: {out_tag or '(default)'}")
+
     browser = BrowserManager(config=config)
     browser.should_stop = ctrl.should_stop  # send_cdp 里每 2s 检查一次，让 Ctrl+C 有机会生效
-    writer = OutputWriter(config["output_dir"], tag=tag)
+    writer = OutputWriter(config["output_dir"], tag=out_tag)
     behavior = BrowserBehavior()
 
     ctrl.log(f"\n   已有数据: {len(writer.all_jobs)} 条")
@@ -547,9 +576,24 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
             jobs = VueExtractor.extract(browser)
             if not jobs:
                 ctrl.log(f"\n   [!] 仍无新数据。还差 {count - success_count} 条。")
-                ctrl.wait_user("   [>] 请在浏览器中确认页面状态后点「继续」 ...", kind="page_check")
+                result = ctrl.wait_user(
+                    "   [>] 请在浏览器中确认页面状态后点「继续」 ...",
+                    kind="page_check",
+                )
                 # [H4] 记录空列表分支
-                _dt("H4", "run_collection", "empty_jobs_branch", {"keyword_mode": keyword_mode})
+                _dt("H4", "run_collection", "empty_jobs_branch", {"keyword_mode": keyword_mode, "result": result})
+
+                if result == "manual_scroll":
+                    # 用户已在浏览器手动滚动/翻页 → 立即重新提取，有数据就直接采集
+                    jobs = VueExtractor.extract(browser)
+                    if jobs:
+                        _dt("H4", "run_collection", "manual_scroll_recovered", {"count": len(jobs)})
+                        ctrl.log(f"   [+] 检测到 {len(jobs)} 条，继续采集")
+                        # 不 continue，正常进入下方遍历逻辑
+                    else:
+                        # 仍然没有，重走弹窗流程
+                        continue
+
                 if keyword_mode and not ctrl.should_stop():
                     # 关键词路线：继续时重连活跃页面 + 按关键词重新导航，避免读到无关页面
                     _dt("H4", "run_collection", "empty_jobs_reconnect")
@@ -679,9 +723,11 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
 
         # === for 结束后：如果没有任何进展（全部跳过），触发滚动加载更多 ===
         if success_count == prev_success_count and not ctrl.should_stop():
+            _dt("H4", "run_collection", "scroll_for_more_start", {"success": success_count, "prev": prev_success_count})
             ctrl.log(f"   [*] 本批已处理完，滚动加载更多 ...")
             behavior.auto_scroll_list(browser)
             _interruptible_sleep(ctrl, 2)
+            _dt("H4", "run_collection", "scroll_for_more_done", {})
 
     # ===== Step 5: 总结 =====
     stopped = ctrl.should_stop()

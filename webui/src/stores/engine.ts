@@ -1,6 +1,8 @@
 import { defineStore } from "pinia";
+import { watch } from "vue";
 import { api, type City, type EngineConfig, type Job, type StartParams } from "@/api";
 import { trace } from "@/utils/debugTracer";
+import { useSound } from "@/composables/useSound";
 
 /** 解析薪资文本 → [min, max]（单位 K）。无法解析返回 null。 */
 function parseSalary(text?: string): [number, number] | null {
@@ -59,6 +61,19 @@ interface State {
 
 let logSeq = 0;
 let ws: WebSocket | null = null;
+const sound = useSound();
+
+// 模块级防抖计时器（不能放在 defineStore 内部的对象字面量里）
+let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function _debouncedSaveParams(getParams: () => Record<string, unknown>, save: (p: Record<string, unknown>) => Promise<void>) {
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    try {
+      await save(getParams());
+    } catch { /* 静默 */ }
+  }, 800);
+}
 
 export const useEngine = defineStore("engine", {
   state: (): State => ({
@@ -129,6 +144,18 @@ export const useEngine = defineStore("engine", {
       try {
         this.config = await api.getConfig(this.params.browser_type);
         this.running = this.config.running;
+        const saved = await api.getStartParams();
+        if (saved && typeof saved === "object") {
+          Object.assign(this.params, saved);
+        }
+        watch(
+          () => this.params,
+          () => _debouncedSaveParams(
+            () => this.params as unknown as Record<string, unknown>,
+            (p) => api.saveStartParams(p as any)
+          ),
+          { deep: true }
+        );
       } catch (e) {
         this.pushLog("error", `加载配置失败: ${e}`);
       }
@@ -290,7 +317,12 @@ export const useEngine = defineStore("engine", {
 
     async loadResults(date?: string) {
       try {
-        const r = await api.getResults(date);
+        trace.startScope("load-results");
+        trace.api("engine:loadResults", "加载岗位列表", {
+          date: date ?? "(latest)",
+          output_dir: this.config?.output_dir,
+        });
+        const r = await api.getResults(date, this.config?.output_dir);
         const jobs: Job[] = (r.jobs || []).map((j: any) => {
           if (j.salary && (j.salaryMin == null || j.salaryMax == null)) {
             const parsed = parseSalary(j.salary);
@@ -304,8 +336,16 @@ export const useEngine = defineStore("engine", {
         this.jobs = jobs;
         this.resultFiles = r.files || [];
         this.currentFile = r.file;
+        trace.api("engine:loadResults", "加载成功", {
+          jobs_count: jobs.length,
+          current_file: r.file,
+          files_count: r.files?.length,
+        });
+        trace.endScope("load-results");
       } catch (e) {
         this.pushLog("error", `加载结果失败: ${e}`);
+        trace.api("engine:loadResults", "加载失败", { error: String(e) });
+        trace.endScope("load-results");
       }
     },
 
@@ -352,6 +392,10 @@ export const useEngine = defineStore("engine", {
             this.stopping = false;
             this.pausing = false;
             this.loadResults();
+            if (ev.state === "done") {
+              sound.play("done");
+              try { (window as any).pywebview?.api?.flash_taskbar?.(3); } catch { /* 静默 */ }
+            }
           }
           if (ev.state === "error") {
             this.running = false;
@@ -362,6 +406,8 @@ export const useEngine = defineStore("engine", {
             }
             this.errorMsg = String(ev.detail ?? "");
             this.loadResults();
+            sound.play("error");
+            try { (window as any).pywebview?.api?.flash_taskbar?.(8); } catch { /* 静默 */ }
           }
           if (ev.state === "paused") {
             this.pausing = false;
@@ -370,6 +416,8 @@ export const useEngine = defineStore("engine", {
         case "need_action":
           this.pendingAction = { reason: ev.reason, kind: ev.kind || "confirm" };
           this.state = "waiting";
+          sound.play("alert");
+          try { (window as any).pywebview?.api?.flash_taskbar?.(6); } catch { /* 静默 */ }
           trace.action("engine:handleEvent", "需要用户操作", { reason: ev.reason, kind: ev.kind });
           break;
       }

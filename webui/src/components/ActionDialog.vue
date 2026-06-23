@@ -42,12 +42,17 @@ const isPageCheck = computed(() => engine.pendingAction?.kind === "page_check");
     </p>
 
     <template #footer>
-      <GlassButton v-if="isPageCheck" variant="ghost" size="sm" @click="engine.ack('wait')">
-        我要先手动操作
-      </GlassButton>
-      <GlassButton variant="solid" size="sm" @click="engine.ack('')">
-        我已完成，继续
-      </GlassButton>
+      <div class="flex gap-2 flex-wrap">
+        <GlassButton v-if="isPageCheck" variant="ghost" size="sm" @click="engine.ack('manual_scroll')">
+          已手动滚动/翻页
+        </GlassButton>
+        <GlassButton v-if="isPageCheck" variant="ghost" size="sm" @click="engine.ack('wait')">
+          我要先手动操作
+        </GlassButton>
+        <GlassButton variant="solid" size="sm" @click="engine.ack('')">
+          我已完成，继续
+        </GlassButton>
+      </div>
     </template>
   </GlassDialog>
 </template>

@@ -86,9 +86,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ payload }),
     }),
-  getResults: (date?: string) =>
+  getResults: (date?: string, outputDir?: string) =>
     jsonFetch<ResultsResponse>(
-      "/api/results" + (date ? `?date=${encodeURIComponent(date)}` : "")
+      "/api/results" +
+        (date || outputDir
+          ? "?" +
+            [
+              date ? `date=${encodeURIComponent(date)}` : "",
+              outputDir ? `output_dir=${encodeURIComponent(outputDir)}` : "",
+            ]
+              .filter(Boolean)
+              .join("&")
+          : "")
     ),
   getCities: () => jsonFetch<{ cities: City[] }>("/api/cities"),
   refreshCities: (browser = "chrome") =>
@@ -104,5 +113,12 @@ export const api = {
     jsonFetch<{ ok: boolean; browser_path: string; output_dir: string }>(
       "/api/config",
       { method: "POST", body: JSON.stringify(body) }
+    ),
+  getStartParams: () =>
+    jsonFetch<Partial<StartParams>>("/api/start-params"),
+  saveStartParams: (params: Partial<StartParams>) =>
+    jsonFetch<{ ok: boolean }>(
+      "/api/start-params",
+      { method: "POST", body: JSON.stringify(params) }
     ),
 };
