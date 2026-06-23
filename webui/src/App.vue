@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useEngine } from "@/stores/engine";
 import { useTheme } from "@/ui/theme";
 import ConfigPanel from "@/components/ConfigPanel.vue";
@@ -9,69 +9,45 @@ import LogConsole from "@/components/LogConsole.vue";
 import ResultTable from "@/components/ResultTable";
 import ActionDialog from "@/components/ActionDialog.vue";
 import Showcase from "@/components/Showcase.vue";
-import { useLocalStorage } from "@/composables/useLocalStorage";
+import { Panel, PanelGroup, PanelResizeHandle } from "vue-resizable-panels";
 
 const engine = useEngine();
 const { mode, toggle } = useTheme();
 const isDev = import.meta.env.DEV;
 const tab = ref<"logs" | "results" | "ui">("logs");
 
-// ConfigPanel 折叠偏好（跨刷新 / 跨标签同步）
-const configCollapsed = useLocalStorage<boolean>(
-  "boss:config-collapsed",
-  false,
-  { validator: (v): v is boolean => typeof v === "boolean" }
-);
+// 是否折叠配置面板（由 Panel 的 collapsible 事件驱动）
+const configCollapsed = ref(false);
 
-// 测顶栏实际高度，写入 CSS 变量；sticky 锚点跟着它走
-const headerRef = ref<HTMLElement | null>(null);
-let ro: ResizeObserver | null = null;
-function measureHeader() {
-  const el = headerRef.value;
-  if (!el) return;
-  document.documentElement.style.setProperty("--header-h", `${el.offsetHeight}px`);
-}
+// 根据视口宽度计算初始比例，小屏更窄、大屏稍宽
+const getDefaultSize = (): number => {
+  const w = window.innerWidth;
+  if (w < 1024) return 38;
+  if (w < 1280) return 32;
+  return 28;
+};
 
 onMounted(async () => {
-  requestAnimationFrame(measureHeader);
-  if (typeof ResizeObserver !== "undefined" && headerRef.value) {
-    ro = new ResizeObserver(measureHeader);
-    ro.observe(headerRef.value);
-  }
-
   await engine.loadConfig();
   engine.connectWs();
   if (engine.running) engine.state = "running";
-});
-
-onUnmounted(() => {
-  ro?.disconnect();
-  ro = null;
 });
 </script>
 
 <template>
   <div class="h-screen flex flex-col">
-    <!-- 顶栏 -->
-    <header
-      ref="headerRef"
-      class="flex items-center gap-3 px-6 py-3.5 border-b border-bg-border bg-bg-panel"
-    >
-      <div class="w-8 h-8 rounded-xl bg-bg-raised border border-bg-border flex items-center justify-center text-fg font-bold">
-        B
-      </div>
+    <header class="flex items-center gap-3 px-6 py-3.5 border-b border-bg-border bg-bg-panel">
+      <div class="w-8 h-8 rounded-xl bg-bg-raised border border-bg-border flex items-center justify-center text-fg font-bold">B</div>
       <div>
         <h1 class="text-base font-semibold text-fg leading-tight">BOSS 直聘助手</h1>
         <p class="text-[11px] text-fg-subtle leading-tight">零驱动 · 安全模式 · V14 引擎</p>
       </div>
       <div class="flex-1"></div>
-
       <button
         class="text-[12px] px-3 py-1.5 rounded-full border border-bg-border text-fg-muted hover:text-fg transition-colors"
-        :title="mode === 'light' ? '切换到深色' : '切换到浅色'"
         @click="toggle"
       >
-        {{ mode === "light" ? "🌙 深色" : "☀️ 浅色" }}
+        {{ mode === "light" ? "深色" : "浅色" }}
       </button>
       <span
         class="text-[11px] px-2.5 py-1 rounded-full"
@@ -81,78 +57,72 @@ onUnmounted(() => {
       </span>
     </header>
 
-    <!-- 主体：
-         - 窄屏：单列纵向堆叠；ConfigPanel 在上、右半边在下；main 整体竖滚
-         - 宽屏：ConfigPanel 用 fixed 定位贴视口左边，高 100dvh；main 左侧预留 ConfigPanel 宽度，避免内容被遮挡
-    -->
-    <main
-      class="flex-1 min-h-0 grid grid-cols-1 overflow-y-auto overflow-x-hidden"
-      :class="configCollapsed
-        ? 'lg:grid-cols-[64px_1fr]'
-        : 'lg:grid-cols-[300px_1fr]'"
-    >
-      <!-- ConfigPanel 列：fixed 定位贴视口左侧，高度 100dvh（包含 header 高度），
-           内容从 header 下方开始；展开 300px / 折叠 64px 宽度过渡 -->
-      <div class="relative hidden lg:block">
-        <div
-          class="fixed top-0 left-0 w-full h-screen transition-[width,padding] duration-300 ease-out pointer-events-none"
-          :class="configCollapsed
-            ? 'lg:w-[64px] lg:pl-0'
-            : 'lg:w-[300px] lg:pl-0'"
+    <main class="flex-1 min-h-0 overflow-hidden">
+      <PanelGroup direction="horizontal" auto-save-id="boss:layout" class="flex h-full w-full">
+        <!-- 配置面板（可折叠） -->
+        <Panel
+          v-if="!configCollapsed"
+          collapsible
+          :default-size="getDefaultSize()"
+          :min-size="10"
+          :max-size="50"
+          class="flex flex-col overflow-hidden"
+          @collapse="configCollapsed = true"
         >
-          <div
-            class="h-full pt-[calc(var(--header-h)+1rem)] pb-4 pl-4 pr-0 pointer-events-auto"
-          >
-            <div class="h-full overflow-hidden">
-              <ConfigPanel
-                v-if="!configCollapsed"
-                class="h-full"
-                @collapse="configCollapsed = true"
-              />
-              <CollapsedConfigPanel
-                v-else
-                class="h-full"
-                @expand="configCollapsed = false"
-              />
+          <ConfigPanel class="h-full" @collapse="configCollapsed = true" />
+        </Panel>
+
+        <!-- 折叠状态下的窄栏（固定 5%，不折叠） -->
+        <Panel
+          v-else
+          :default-size="5"
+          :min-size="5"
+          :max-size="5"
+          class="flex flex-col overflow-hidden"
+        >
+          <CollapsedConfigPanel class="h-full" @expand="configCollapsed = false" />
+        </Panel>
+
+        <!-- 拖拽手柄：配置面板展开时显示，折叠时隐藏 -->
+        <PanelResizeHandle
+          v-if="!configCollapsed"
+          class="group relative flex w-2 items-center justify-center hover:bg-brand/10 transition-colors cursor-col-resize"
+        >
+          <div class="flex h-10 w-1 rounded-full bg-border group-hover:bg-brand/50 transition-colors" />
+        </PanelResizeHandle>
+
+        <!-- 右侧主内容区 -->
+        <Panel :min-size="30" class="flex flex-col overflow-hidden">
+          <section class="flex flex-col gap-4 min-w-0 p-4 overflow-y-auto h-full">
+            <ControlBar />
+
+            <div class="flex gap-1 bg-bg-panel border border-bg-border rounded-xl p-1 w-fit">
+              <button
+                class="px-4 py-1.5 rounded-lg text-sm transition-colors"
+                :class="tab === 'logs' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
+                @click="tab = 'logs'"
+              >实时日志</button>
+              <button
+                class="px-4 py-1.5 rounded-lg text-sm transition-colors"
+                :class="tab === 'results' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
+                @click="tab = 'results'; engine.loadResults()"
+              >岗位列表</button>
+              <button
+                v-if="isDev"
+                class="px-4 py-1.5 rounded-lg text-sm transition-colors"
+                :class="tab === 'ui' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
+                @click="tab = 'ui'"
+              >组件预览</button>
             </div>
-          </div>
-        </div>
-      </div>
 
-      <section class="flex flex-col gap-4 min-w-0 p-4">
-        <ControlBar />
-
-        <div class="flex gap-1 bg-bg-panel border border-bg-border rounded-xl p-1 w-fit">
-          <button
-            class="px-4 py-1.5 rounded-lg text-sm transition-colors"
-            :class="tab === 'logs' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
-            @click="tab = 'logs'"
-          >
-            实时日志
-          </button>
-          <button
-            class="px-4 py-1.5 rounded-lg text-sm transition-colors"
-            :class="tab === 'results' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
-            @click="tab = 'results'; engine.loadResults()"
-          >
-            岗位列表
-          </button>
-          <button
-            v-if="isDev"
-            class="px-4 py-1.5 rounded-lg text-sm transition-colors"
-            :class="tab === 'ui' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
-            @click="tab = 'ui'"
-          >
-            组件预览
-          </button>
-        </div>
-
-        <div class="min-h-[480px]">
-          <LogConsole v-show="tab === 'logs'" />
-          <ResultTable v-show="tab === 'results'" />
-          <Showcase v-if="isDev" v-show="tab === 'ui'" />
-        </div>
-      </section>
+            <div class="min-h-[480px]">
+              <LogConsole v-show="tab === 'logs'" />
+              <ResultTable v-show="tab === 'results'" />
+              <Showcase v-if="isDev" v-show="tab === 'ui'" />
+            </div>
+          </section>
+        </Panel>
+      </PanelGroup>
     </main>
 
     <ActionDialog />

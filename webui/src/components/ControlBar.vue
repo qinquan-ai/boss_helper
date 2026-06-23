@@ -49,7 +49,7 @@ const metrics = [
 
       <div class="flex-1"></div>
 
-      <!-- 折叠/展开统计区：参考 video_workflow 时间轴的"展开/隐藏"小药丸 -->
+      <!-- 折叠/展开统计区：带"展开/隐藏"小药丸按钮 -->
       <button
         type="button"
         class="w-7 h-7 rounded-full flex items-center justify-center transition-fast bg-white/5 hover:bg-white/10 text-fg-muted hover:text-fg"
