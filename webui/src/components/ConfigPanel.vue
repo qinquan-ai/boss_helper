@@ -55,9 +55,18 @@ function onOutputDirChange(e: Event) {
   engine.saveConfig({ output_dir: (e.target as HTMLInputElement).value });
 }
 
-const tagDisplay = computed(() =>
-  engine.params.tag_sync ? engine.params.query || "(同步搜索关键词)" : engine.params.tag || ""
-);
+const tagDisplay = computed(() => {
+  if (!engine.params.tag_sync) return engine.params.tag || "";
+  const parts: string[] = [engine.params.query || "(搜索关键词)"];
+  if (engine.params.salary_min || engine.params.salary_max) {
+    const min = engine.params.salary_min ?? "";
+    const max = engine.params.salary_max ?? "";
+    parts.push(min && max ? `${min}-${max}K` : min ? `${min}K以上` : `${max}K以下`);
+  }
+  if (engine.params.city_name) parts.push(engine.params.city_name);
+  parts.push(`共${engine.params.count}条`);
+  return parts.join("_");
+});
 
 // BOSS 直聘薪资标准档位（按截图范围）
 const SALARY_RANGE_OPTIONS = [
@@ -240,9 +249,9 @@ watch(salaryRangeValue, (v) => {
     <!-- 输出文件标记 + 同步开关 -->
     <div>
       <label class="field-label flex items-center justify-between">
-        <span>输出文件标记 (可选)</span>
+        <span>输出文件名</span>
         <span class="flex items-center gap-1.5 text-[11px] text-fg-muted font-normal">
-          同步关键词
+          同步配置
           <GlassCheckbox v-model="engine.params.tag_sync" :disabled="engine.running" />
         </span>
       </label>
@@ -250,7 +259,7 @@ watch(salaryRangeValue, (v) => {
         v-if="!engine.params.tag_sync"
         v-model="engine.params.tag"
         type="text"
-        placeholder="例如 stress_test"
+        placeholder="不填则不加分隔名"
         class="input"
         :disabled="engine.running"
       />

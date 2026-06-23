@@ -39,7 +39,7 @@ function toggle() {
   width: 18px;
   height: 18px;
   border-radius: 6px;
-  border: 1px solid var(--glass-border);
+  border: 1.5px solid rgba(17, 17, 19, 0.22);
   background: var(--glass-bg);
   display: inline-flex;
   align-items: center;
@@ -47,14 +47,15 @@ function toggle() {
   cursor: pointer;
   flex-shrink: 0;
   color: var(--accent-fg);
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 .gcheck:hover {
-  border-color: var(--glass-border-hover);
+  border-color: rgba(17, 17, 19, 0.38);
+  box-shadow: 0 0 0 2px rgba(17, 17, 19, 0.08);
 }
 .gcheck.is-on {
   background: var(--accent);
-  border-color: transparent;
+  border-color: var(--accent);
 }
 .gcheck:disabled {
   opacity: 0.45;

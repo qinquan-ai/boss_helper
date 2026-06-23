@@ -76,7 +76,7 @@ export const useEngine = defineStore("engine", {
       city_name: null,
       salary_min: null,
       salary_max: null,
-      tag_sync: false,
+      tag_sync: true,
     },
     state: "idle",
     running: false,
