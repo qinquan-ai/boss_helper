@@ -13,3 +13,4 @@ export * from "./components/toggle";
 export * from "./components/input";
 export * from "./components/scope";
 export * from "./components/checkbox";
+export * from "./components/dialog";

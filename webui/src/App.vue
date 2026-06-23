@@ -8,13 +8,11 @@ import ControlBar from "@/components/ControlBar.vue";
 import LogConsole from "@/components/LogConsole.vue";
 import ResultTable from "@/components/ResultTable";
 import ActionDialog from "@/components/ActionDialog.vue";
-import Showcase from "@/components/Showcase.vue";
 import { useLocalStorage } from "@/composables/useLocalStorage";
 
 const engine = useEngine();
 const { mode, toggle } = useTheme();
-const isDev = import.meta.env.DEV;
-const tab = ref<"logs" | "results" | "ui">("logs");
+const tab = ref<"logs" | "results">("logs");
 const configWidth = useLocalStorage<number>("boss:config-width", 300, {
   validator: (v) => typeof v === "number" && v >= 220 && v<= 500,
 });
@@ -66,7 +64,6 @@ onUnmounted(() => {
       </div>
       <div>
         <h1 class="text-base font-semibold text-fg leading-tight">BOSS 直聘助手</h1>
-        <p class="text-[11px] text-fg-subtle leading-tight">零驱动 · 安全模式 · V14 引擎</p>
       </div>
       <div class="flex-1"></div>
 
@@ -141,20 +138,11 @@ onUnmounted(() => {
           >
             岗位列表
           </button>
-          <button
-            v-if="isDev"
-            class="px-4 py-1.5 rounded-lg text-sm transition-colors"
-            :class="tab === 'ui' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
-            @click="tab = 'ui'"
-          >
-            组件预览
-          </button>
         </div>
 
         <div class="min-h-[480px]">
           <LogConsole v-show="tab === 'logs'" />
           <ResultTable v-show="tab === 'results'" />
-          <Showcase v-if="isDev" v-show="tab === 'ui'" />
         </div>
       </section>
     </main>
