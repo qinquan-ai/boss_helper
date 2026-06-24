@@ -20,21 +20,16 @@ watch(
   (newFiltered) => {
     trace.api("ResultTable:filtered", `filtered 传给 JobTable: ${newFiltered.length} 条`, {
       count: newFiltered.length,
-      salaryMin: f.salaryMin.value,
-      salaryMax: f.salaryMax.value,
+      salaryFilter: f.salaryFilter.value,
     });
   }
 );
 
 // 各 filter 事件处理（抽成函数，避免 inline 表达式 TS 类型报错）
 function onKeyword(v: string) { f.keyword.value = v; }
-function onSalaryMin(v: number | null) {
-  trace.api("ResultTable:salary-min", `收到 salary-min 事件: ${v}`, {});
-  f.salaryMin.value = v;
-}
-function onSalaryMax(v: number | null) {
-  trace.api("ResultTable:salary-max", `收到 salary-max 事件: ${v}`, {});
-  f.salaryMax.value = v;
+function onSalaryFilter(v: string[]) {
+  trace.api("ResultTable:salary-filter", `收到 salary-filter 事件: ${v}`, {});
+  f.salaryFilter.value = v;
 }
 function onCityFilter(v: string[]) { f.cityFilter.value = v; }
 function onExperienceFilter(v: string[]) { f.experienceFilter.value = v; }
@@ -50,10 +45,8 @@ function onCompanyLabelFilter(v: string[]) { f.companyLabelFilter.value = v; }
     <FilterBar
       :keyword="f.keyword.value"
       @update:keyword="onKeyword"
-      :salary-min="f.salaryMin.value"
-      @update:salary-min="onSalaryMin"
-      :salary-max="f.salaryMax.value"
-      @update:salary-max="onSalaryMax"
+      :salary-filter="f.salaryFilter.value"
+      @update:salary-filter="onSalaryFilter"
       :city-filter="f.cityFilter.value"
       @update:city-filter="onCityFilter"
       :experience-filter="f.experienceFilter.value"

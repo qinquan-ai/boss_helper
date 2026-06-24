@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useEngine } from "@/stores/engine";
-import { GlassSelect, GlassCheckbox, GlassToggle } from "@/ui";
+import { GlassSelect, GlassCheckbox, GlassToggle, GlassMultiSelect } from "@/ui";
 
 defineEmits<{
   (e: "collapse"): void;
@@ -48,6 +48,10 @@ async function pickBrowser() {
   if (p) engine.saveConfig({ browser_path: p });
 }
 
+async function resetBrowserPath() {
+  await engine.saveConfig({ browser_path: "" });
+}
+
 function onBrowserPathChange(e: Event) {
   engine.saveConfig({ browser_path: (e.target as HTMLInputElement).value });
 }
@@ -79,6 +83,70 @@ const SALARY_RANGE_OPTIONS = [
   { label: "50K 以上",value: "50-0"  },
 ];
 
+const JOB_TYPE_OPTIONS = [
+  { label: "不限", value: "" },
+  { label: "全职", value: "1901" },
+  { label: "兼职", value: "1903" },
+  { label: "实习", value: "1902" },
+];
+
+const DEGREE_OPTIONS = ["初中及以下", "中专/中技", "高中", "大专", "本科", "硕士", "博士"];
+const DEGREE_MAPPING: Record<string, string> = {
+  "初中及以下": "209",
+  "中专/中技": "208",
+  "高中": "206",
+  "大专": "202",
+  "本科": "203",
+  "硕士": "204",
+  "博士": "205"
+};
+
+const selectedDegrees = computed({
+  get() {
+    const codes = engine.params.degrees || [];
+    const labels: string[] = [];
+    for (const [label, code] of Object.entries(DEGREE_MAPPING)) {
+      if (codes.includes(code)) {
+        labels.push(label);
+      }
+    }
+    return labels;
+  },
+  set(labels: string[]) {
+    const codes = labels.map(l => DEGREE_MAPPING[l]).filter(Boolean);
+    engine.params.degrees = codes;
+  }
+});
+
+const EXPERIENCE_OPTIONS = ["在校生", "应届生", "经验不限", "1年以内", "1-3年", "3-5年", "5-10年", "10年以上"];
+const EXPERIENCE_MAPPING: Record<string, string> = {
+  "在校生": "108",
+  "应届生": "102",
+  "经验不限": "101",
+  "1年以内": "103",
+  "1-3年": "104",
+  "3-5年": "105",
+  "5-10年": "106",
+  "10年以上": "107"
+};
+
+const selectedExperience = computed({
+  get() {
+    const codes = engine.params.experience || [];
+    const labels: string[] = [];
+    for (const [label, code] of Object.entries(EXPERIENCE_MAPPING)) {
+      if (codes.includes(code)) {
+        labels.push(label);
+      }
+    }
+    return labels;
+  },
+  set(labels: string[]) {
+    const codes = labels.map(l => EXPERIENCE_MAPPING[l]).filter(Boolean);
+    engine.params.experience = codes;
+  }
+});
+
 // 从 engine.params 同步到下拉框当前值
 const salaryRangeValue = ref("0-0");
 function syncSalaryFromParams() {
@@ -101,6 +169,9 @@ watch(salaryRangeValue, (v) => {
   const max = parseInt(maxStr) || 0;
   engine.params.salary_min = min === 0 ? null : min;
   engine.params.salary_max = max === 0 ? null : max;
+  if (v === "0-0") {
+    engine.params.salary_fuzzy = false;
+  }
 });
 </script>
 
@@ -214,7 +285,55 @@ watch(salaryRangeValue, (v) => {
         :disabled="engine.running"
         @update:model-value="(v) => (salaryRangeValue = v)"
       />
+      <label v-if="salaryRangeValue !== '0-0'" class="flex items-center justify-between cursor-pointer mt-2 pl-0.5">
+        <span class="text-xs text-fg-muted" title="允许局部重叠/交集的岗位入选，不限制网页搜索范围，仅在本地提取时过滤">
+          薪资宽泛匹配
+          <span class="text-[10px] text-fg-subtle block">(有交集即可，本地过滤)</span>
+        </span>
+        <GlassCheckbox
+          v-model="engine.params.salary_fuzzy"
+          :disabled="engine.running"
+        />
+      </label>
       <p class="text-[11px] text-fg-subtle mt-1">自动过滤；结果表可进一步筛选</p>
+    </div>
+
+    <!-- 工作性质 -->
+    <div>
+      <label class="field-label">工作性质 (可选)</label>
+      <GlassSelect
+        :model-value="engine.params.job_type"
+        :options="JOB_TYPE_OPTIONS"
+        placeholder="不限"
+        :disabled="engine.running"
+        @update:model-value="(v) => (engine.params.job_type = v)"
+      />
+    </div>
+
+    <!-- 学历要求 -->
+    <div>
+      <label class="field-label">学历要求 (可选)</label>
+      <GlassMultiSelect
+        :model-value="selectedDegrees"
+        label="学历"
+        :options="DEGREE_OPTIONS"
+        :filterable="false"
+        :disabled="engine.running"
+        @update:model-value="(v) => (selectedDegrees = v)"
+      />
+    </div>
+
+    <!-- 工作经验 -->
+    <div>
+      <label class="field-label">工作经验 (可选)</label>
+      <GlassMultiSelect
+        :model-value="selectedExperience"
+        label="经验"
+        :options="EXPERIENCE_OPTIONS"
+        :filterable="false"
+        :disabled="engine.running"
+        @update:model-value="(v) => (selectedExperience = v)"
+      />
     </div>
 
     <!-- 浏览器 -->
@@ -235,6 +354,15 @@ watch(salaryRangeValue, (v) => {
           :disabled="engine.running"
           @change="onBrowserPathChange"
         />
+        <button
+          type="button"
+          class="btn-ghost !py-1 !px-2 text-[11px] shrink-0"
+          title="清除当前自定义路径，恢复并自动检测系统默认安装位置"
+          :disabled="engine.running"
+          @click="resetBrowserPath"
+        >
+          自动检测
+        </button>
         <button
           type="button"
           class="btn-ghost !py-1 !px-2 text-[11px] shrink-0"
@@ -324,5 +452,19 @@ watch(salaryRangeValue, (v) => {
 }
 .input-error {
   border-color: var(--danger) !important;
+}
+:deep(.gmulti-select) {
+  display: block;
+  width: 100%;
+}
+:deep(.gmulti-select__trigger) {
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+}
+:deep(.gmulti-select__panel) {
+  right: 0;
+  max-width: none;
 }
 </style>

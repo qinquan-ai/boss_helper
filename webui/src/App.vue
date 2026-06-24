@@ -73,7 +73,7 @@ onMounted(async () => {
   leftPanelWidth.value = getDefaultWidthPx();
   
   const completed = localStorage.getItem("boss-helper:onboarding-completed");
-  if (completed !== "true") {
+  if (completed !== "true" && !engine.params.onboarding_completed) {
     showTour.value = true;
   }
 });
@@ -130,7 +130,7 @@ onMounted(async () => {
         <div
           v-if="!engine.isFullscreen"
           :style="{ flex: `0 0 ${configCollapsed ? '4%' : leftPanelWidth + 'px'}` }"
-          class="flex flex-col overflow-hidden"
+          class="flex flex-col overflow-hidden pl-4 py-4"
         >
           <ConfigPanel v-show="!configCollapsed" class="h-full" @collapse="onCollapse" />
           <CollapsedConfigPanel v-show="configCollapsed" class="h-full" @expand="onExpand" />

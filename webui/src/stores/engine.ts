@@ -59,6 +59,7 @@ interface State {
   pausing: boolean;
   isFullscreen: boolean; // 新增全屏状态
   seamlessMode: boolean;
+  initialized: boolean;
 }
 
 let logSeq = 0;
@@ -94,6 +95,11 @@ export const useEngine = defineStore("engine", {
       salary_min: null,
       salary_max: null,
       tag_sync: true,
+      onboarding_completed: false,
+      job_type: "",
+      degrees: [],
+      experience: [],
+      salary_fuzzy: false,
     },
     state: "idle",
     running: false,
@@ -111,6 +117,7 @@ export const useEngine = defineStore("engine", {
     pausing: false,
     isFullscreen: false,
     seamlessMode: false,
+    initialized: false,
   }),
 
   getters: {
@@ -148,18 +155,21 @@ export const useEngine = defineStore("engine", {
       try {
         this.config = await api.getConfig(this.params.browser_type);
         this.running = this.config.running;
-        const saved = await api.getStartParams();
-        if (saved && typeof saved === "object") {
-          Object.assign(this.params, saved);
+        if (!this.initialized) {
+          const saved = await api.getStartParams();
+          if (saved && typeof saved === "object") {
+            Object.assign(this.params, saved);
+          }
+          watch(
+            () => this.params,
+            () => _debouncedSaveParams(
+              () => this.params as unknown as Record<string, unknown>,
+              async (p) => { await api.saveStartParams(p as any); }
+            ),
+            { deep: true }
+          );
+          this.initialized = true;
         }
-        watch(
-          () => this.params,
-          () => _debouncedSaveParams(
-            () => this.params as unknown as Record<string, unknown>,
-            async (p) => { await api.saveStartParams(p as any); }
-          ),
-          { deep: true }
-        );
       } catch (e) {
         this.pushLog("error", `加载配置失败: ${e}`);
       }

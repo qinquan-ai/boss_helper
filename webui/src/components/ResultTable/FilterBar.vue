@@ -11,8 +11,7 @@ import { trace } from "@/utils/debugTracer";
 
 const props = defineProps<{
   keyword: string;
-  salaryMin: number | null;
-  salaryMax: number | null;
+  salaryFilter: string[];
   cityFilter: string[];
   experienceFilter: string[];
   degreeFilter: string[];
@@ -34,8 +33,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "update:keyword", v: string): void;
-  (e: "update:salaryMin", v: number | null): void;
-  (e: "update:salaryMax", v: number | null): void;
+  (e: "update:salaryFilter", v: string[]): void;
   (e: "update:cityFilter", v: string[]): void;
   (e: "update:experienceFilter", v: string[]): void;
   (e: "update:degreeFilter", v: string[]): void;
@@ -58,33 +56,8 @@ function refresh() {
   engine.loadResults();
 }
 
-// BOSS 直聘薪资标准档位（按截图范围）
-const SALARY_RANGE_OPTIONS = [
-  { label: "不限",     value: "0-0"   },
-  { label: "3K 以下", value: "0-3"   },
-  { label: "3-5K",    value: "3-5"   },
-  { label: "5-10K",   value: "5-10"  },
-  { label: "10-20K",  value: "10-20" },
-  { label: "20-50K",  value: "20-50" },
-  { label: "50K 以上",value: "50-0"  }, // 50-0 = 下限 50，无上限
-];
-
-// 把 props.salaryMin/Max 反推成下拉框当前选中值
-const salaryRangeValue = computed(() => {
-  const min = props.salaryMin ?? 0;
-  const max = props.salaryMax ?? 0;
-  return `${min}-${max}`;
-});
-
-// 用户选了新档位时，把 value 拆回 min/max 发给父组件
-function onSalaryRangeChange(v: string) {
-  trace.api("FilterBar:onSalaryRangeChange", `薪资下拉选中: ${v}`, { salaryMin: props.salaryMin, salaryMax: props.salaryMax });
-  const [minStr, maxStr] = v.split("-");
-  const min = parseInt(minStr) || 0;
-  const max = parseInt(maxStr) || 0;
-  emit("update:salaryMin", min === 0 ? null : min);
-  emit("update:salaryMax", max === 0 ? null : max);
-}
+// BOSS 直聘薪资标准档位（多选列表）
+const SALARY_OPTIONS = ["3K 以下", "3-5K", "5-10K", "10-20K", "20-50K", "50K 以上"];
 
 // chips 行折叠状态（仅控制下方 chips 行的展开/收起，不影响上方工具栏）
 const chipsExpanded = ref(false);
@@ -108,17 +81,15 @@ const chipsExpanded = ref(false);
 
     <div class="flex-1"></div>
 
-    <!-- 薪资范围（Boss 直聘标准档位） -->
+    <!-- 薪资范围（多选） -->
     <div class="flex items-center gap-1 text-xs text-fg-subtle">
-      <span>薪资</span>
-      <div class="w-28">
-        <GlassSelect
-          :model-value="salaryRangeValue"
-          :options="SALARY_RANGE_OPTIONS"
-          placeholder="不限"
-          @update:model-value="onSalaryRangeChange"
-        />
-      </div>
+      <GlassMultiSelect
+        :model-value="props.salaryFilter"
+        label="薪资"
+        :options="SALARY_OPTIONS"
+        :filterable="false"
+        @update:model-value="emit('update:salaryFilter', $event)"
+      />
     </div>
 
     <input

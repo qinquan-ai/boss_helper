@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from "vue";
-import { GlassSpotlight } from "@/ui/components/highlight";
+import { GlassSpotlight2 } from "@/ui/components/highlight";
 import { GlassButton } from "@/ui/components/button";
 import { GlassCard } from "@/ui/components/card";
 import { GlassTag } from "@/ui/components/tag";
+import { useEngine } from "@/stores/engine";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -66,10 +67,11 @@ const steps: TourStep[] = [
 
 // ── GlassSpotlight 的气泡 ref ─────────────────────────────
 const bubbleEl = ref<HTMLElement | null>(null);
-const spotlightRef = ref<InstanceType<typeof GlassSpotlight> | null>(null);
+const spotlightRef = ref<InstanceType<typeof GlassSpotlight2> | null>(null);
 
 // ── 当前目标 DOM 元素 ───────────────────────────────────────
 const currentTargetEl = ref<HTMLElement | null>(null);
+const transitionDuration = ref(150);
 
 // ── 气泡位置计算 ────────────────────────────────────────────
 const bubbleStyle = ref<Record<string, string | number>>({});
@@ -197,7 +199,12 @@ const updateBubblePosition = () => {
 };
 
 // ── 步骤切换时触发气泡位置更新 ─────────────────────────────
-watch(currentStep, () => {
+watch(currentStep, (newStep, oldStep) => {
+  if (newStep === 4 || oldStep === 4) {
+    transitionDuration.value = 0;
+  } else {
+    transitionDuration.value = 150;
+  }
   nextTick(() => {
     if (currentStep.value === 5) {
       emit("update:tab", "results");
@@ -242,27 +249,31 @@ const handlePrev = () => {
 const handleClose = () => {
   emit("update:modelValue", false);
   localStorage.setItem("boss-helper:onboarding-completed", "true");
+  const engine = useEngine();
+  engine.params.onboarding_completed = true;
 };
 </script>
 
 <template>
-  <GlassSpotlight
+  <GlassSpotlight2
     ref="spotlightRef"
     :model-value="modelValue"
     :target-el="currentTargetEl"
     :bubble-position="bubbleStyle"
     :show-pulse="true"
     :padding="8"
-    :transition-duration="300"
+    :transition-duration="transitionDuration"
+    glow-size="auto"
   >
     <!-- 默认气泡插槽 -->
     <div
       v-if="modelValue && steps[currentStep]?.target !== null"
       ref="bubbleEl"
-      class="absolute w-[350px] max-w-[calc(100vw-32px)] z-[9997] transition-all duration-300 ease-out flex pointer-events-auto"
+      class="absolute w-[350px] max-w-[calc(100vw-32px)] z-[9997] flex pointer-events-auto"
+      :class="transitionDuration > 0 ? 'transition-all duration-300 ease-out' : ''"
       :style="bubbleStyle"
     >
-      <GlassCard padded class="flex flex-col gap-4 text-fg w-full !p-5">
+      <GlassCard padded class="flex flex-col gap-4 w-full !p-5 dark-tour-card">
         <div class="flex items-center justify-between">
           <GlassTag variant="brand">
             步骤 {{ currentStep + 1 }} / {{ steps.length }}
@@ -273,10 +284,10 @@ const handleClose = () => {
         </div>
 
         <div class="flex flex-col gap-2">
-          <h3 class="text-sm font-bold text-fg leading-snug">
+          <h3 class="text-base font-bold text-fg leading-snug">
             {{ steps[currentStep].title }}
           </h3>
-          <p class="text-xs text-fg-muted whitespace-pre-wrap leading-relaxed">
+          <p class="text-sm text-fg-muted whitespace-pre-wrap leading-relaxed">
             {{ steps[currentStep].desc }}
           </p>
         </div>
@@ -304,7 +315,7 @@ const handleClose = () => {
       v-else-if="modelValue"
       class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] max-w-[calc(100vw-32px)] z-[9997] flex pointer-events-auto"
     >
-      <GlassCard padded class="flex flex-col gap-5 text-fg w-full !p-6">
+      <GlassCard padded class="flex flex-col gap-5 w-full !p-6 dark-tour-card">
         <div class="flex items-center justify-between">
           <GlassTag variant="brand">
             步骤 {{ currentStep + 1 }} / {{ steps.length }}
@@ -315,10 +326,10 @@ const handleClose = () => {
         </div>
 
         <div class="flex flex-col gap-2">
-          <h3 class="text-base font-bold text-fg leading-snug">
+          <h3 class="text-lg font-bold text-fg leading-snug">
             {{ steps[currentStep].title }}
           </h3>
-          <p class="text-xs text-fg-muted whitespace-pre-wrap leading-relaxed">
+          <p class="text-sm text-fg-muted whitespace-pre-wrap leading-relaxed">
             {{ steps[currentStep].desc }}
           </p>
         </div>
@@ -330,5 +341,74 @@ const handleClose = () => {
         </div>
       </GlassCard>
     </div>
-  </GlassSpotlight>
+  </GlassSpotlight2>
 </template>
+
+<style scoped>
+/* 浅色主题模式下：新手指引卡片反色显示为“深色毛玻璃外观” */
+html:not(.dark) .dark-tour-card {
+  --fg: rgba(255, 255, 255, 0.95);
+  --fg-muted: rgba(255, 255, 255, 0.6);
+  --fg-subtle: rgba(255, 255, 255, 0.38);
+
+  --accent: #ffffff;
+  --accent-fg: #0a0a0b;
+
+  --btn-solid-bg: var(--accent);
+  --btn-solid-fg: var(--accent-fg);
+  --btn-solid-bg-hover: rgba(255, 255, 255, 0.9);
+  --btn-solid-fg-hover: var(--accent-fg);
+
+  --glass-bg: rgba(255, 255, 255, 0.045);
+  --glass-bg-hover: rgba(255, 255, 255, 0.08);
+  --glass-bg-active: rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-hover: rgba(255, 255, 255, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+
+  background: rgba(20, 20, 24, 0.96) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  backdrop-filter: blur(20px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.6), 
+    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+
+/* 深色主题模式下：新手指引卡片反色显示为“浅色毛玻璃外观”，保证强对比度 */
+html.dark .dark-tour-card {
+  --fg: rgba(17, 17, 19, 0.96);
+  --fg-muted: rgba(17, 17, 19, 0.58);
+  --fg-subtle: rgba(17, 17, 19, 0.4);
+
+  --accent: #18181b;
+  --accent-fg: #ffffff;
+
+  --btn-solid-bg: var(--accent);
+  --btn-solid-fg: var(--accent-fg);
+  --btn-solid-bg-hover: var(--accent-fg);
+  --btn-solid-fg-hover: var(--accent);
+
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-hover: rgba(255, 255, 255, 0.72);
+  --glass-bg-active: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(17, 17, 19, 0.08);
+  --glass-border-hover: rgba(17, 17, 19, 0.16);
+  --glass-highlight: rgba(255, 255, 255, 0.75);
+  --glass-shadow: 0 12px 32px -14px rgba(17, 17, 19, 0.22);
+
+  background: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid rgba(17, 17, 19, 0.12) !important;
+  backdrop-filter: blur(20px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+  box-shadow: 
+    0 12px 40px rgba(17, 17, 19, 0.12), 
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+
+.dark-tour-card :deep(.border-t) {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+</style>
+

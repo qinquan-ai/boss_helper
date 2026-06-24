@@ -65,6 +65,7 @@ function open() {
 
 <script lang="ts">
 import { defineComponent, h } from "vue";
+import { GlassTag } from "@/ui";
 
 /** 小块标签：标题 + 一行 chip（不存在则整块隐藏）。 */
 const TagBlock = defineComponent({
@@ -80,9 +81,9 @@ const TagBlock = defineComponent({
               { class: "flex flex-wrap gap-1.5" },
               p.items.map((it: unknown) =>
                 h(
-                  "span",
-                  { class: "px-2 py-0.5 text-xs rounded-md bg-bg-border/40 text-fg" },
-                  String(it)
+                  GlassTag,
+                  { variant: "default" },
+                  { default: () => String(it) }
                 )
               )
             ),

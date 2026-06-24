@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from "vue";
+import { ref, watch, nextTick, computed, onMounted, onUnmounted } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -16,11 +16,13 @@ const props = withDefaults(
     padding?: number;
     transitionDuration?: number;
     showPulse?: boolean;
+    glowSize?: "thin" | "md" | "lg" | "auto";
   }>(),
   {
     padding: 8,
     transitionDuration: 300,
     showPulse: true,
+    glowSize: "auto",
   }
 );
 
@@ -28,23 +30,9 @@ const emit = defineEmits<{
   "update:modelValue": [val: boolean];
 }>();
 
-// ── 主题默认值 ──────────────────────────────────────────────
-const brandRgb = "59 130 246";
-// 紫粉 + 青色渐变主题
-const purpleCyanRgb = "186 66 255";
-const cyanRgb = "0 225 255";
-
-const resolved = computed(
-  () => ({
-    borderColor: props.theme?.borderColor ?? `rgb(${purpleCyanRgb})`,
-    glowColor: props.theme?.glowColor ?? `rgba(${purpleCyanRgb}, 0.5)`,
-    innerGlowColor: props.theme?.innerGlowColor ?? `rgba(${purpleCyanRgb}, 0.15)`,
-    pulseColor: props.theme?.pulseColor ?? `rgba(${cyanRgb}, 0.7)`,
-  })
-);
-
 const highlightStyle = ref<Record<string, string | number>>({});
-const borderRadius = ref("12px");
+const borderRadius = ref("10px");
+const autoGlowSize = ref<"thin" | "md" | "lg">("thin");
 
 const updateHighlight = () => {
   if (!props.modelValue || !props.targetEl) {
@@ -64,7 +52,6 @@ const updateHighlight = () => {
   }
 
   if (targetRadius && targetRadius !== "0px" && targetRadius !== "0") {
-    // 匹配如 "8px" 这种单一数值
     const match = targetRadius.trim().match(/^(\d+(?:\.\d+)?)(px)$/);
     if (match) {
       const val = parseFloat(match[1]);
@@ -73,7 +60,14 @@ const updateHighlight = () => {
       borderRadius.value = targetRadius;
     }
   } else {
-    borderRadius.value = "12px";
+    borderRadius.value = "10px";
+  }
+
+  // 智能自动计算光效厚度等级
+  if (rect.width > 300 || rect.height > 150) {
+    autoGlowSize.value = "thin";
+  } else {
+    autoGlowSize.value = "md";
   }
 
   highlightStyle.value = {
@@ -95,6 +89,35 @@ const spotlightStyleCombined = computed(() => ({
   ...mergedHighlightStyle.value,
   borderRadius: borderRadius.value,
 }));
+
+const sizeConfig = computed(() => {
+  let size = props.glowSize ?? "auto";
+  if (size === "auto") {
+    size = autoGlowSize.value;
+  }
+  if (size === "thin") {
+    return {
+      inset: "-2px",
+      padding: "2px",
+      blurFilter: "none",
+      spread: "0px",
+    };
+  } else if (size === "md") {
+    return {
+      inset: "-4px",
+      padding: "4px",
+      blurFilter: "blur(2px)",
+      spread: "1px",
+    };
+  } else {
+    return {
+      inset: "-12px",
+      padding: "12px",
+      blurFilter: "blur(8px)",
+      spread: "4px",
+    };
+  }
+});
 
 // ── 监听 & 生命周期 ─────────────────────────────────────────
 watch(
@@ -166,8 +189,6 @@ const onGlobalUpdate = () => {
   }
 };
 
-import { onMounted, onUnmounted } from "vue";
-
 onMounted(() => {
   window.addEventListener("resize", onGlobalUpdate);
   window.addEventListener("scroll", onGlobalUpdate, true);
@@ -179,30 +200,9 @@ onUnmounted(() => {
   stopObserve();
 });
 
-// ── 关闭 ────────────────────────────────────────────────────
 const handleClose = () => emit("update:modelValue", false);
-
-// ── 暴露方法 ────────────────────────────────────────────────
 const updatePosition = () => updateHighlight();
 defineExpose({ updatePosition });
-
-// ── Slots ───────────────────────────────────────────────────
-const slots = defineSlots<{
-  default?: () => unknown;
-  overlay?: (props: {
-    highlightStyle: Record<string, string | number>;
-    bubblePosition: Record<string, string | number>;
-    resolved: {
-      borderColor: string;
-      glowColor: string;
-      innerGlowColor: string;
-      pulseColor: string;
-    };
-    showPulse: boolean;
-    transitionDuration: number;
-    handleClose: () => void;
-  }) => unknown;
-}>();
 </script>
 
 <template>
@@ -214,28 +214,33 @@ const slots = defineSlots<{
         name="overlay"
         :highlight-style="mergedHighlightStyle"
         :bubble-position="bubblePosition ?? {}"
-        :resolved="resolved"
         :show-pulse="showPulse"
         :transition-duration="transitionDuration"
         :handle-close="handleClose"
       />
 
-      <!-- 默认渲染：描边 + 光晕高亮框 -->
+      <!-- 默认渲染：光效2 (Uiverse 旋转霓虹渐变 + 柔和毛玻璃描边) -->
       <template v-else>
         <div
-          class="absolute pointer-events-none highlight-glow-box"
+          class="absolute pointer-events-none highlight-glow-box-v2"
           :style="{
             ...spotlightStyleCombined,
+            '--glow-inset': sizeConfig.inset,
+            '--glow-padding': sizeConfig.padding,
+            '--glow-blur-filter': sizeConfig.blurFilter,
+            '--glow-spread': sizeConfig.spread,
             transition: transitionDuration > 0
               ? `top ${transitionDuration}ms cubic-bezier(0.25, 1, 0.5, 1), left ${transitionDuration}ms cubic-bezier(0.25, 1, 0.5, 1), width ${transitionDuration}ms cubic-bezier(0.25, 1, 0.5, 1), height ${transitionDuration}ms cubic-bezier(0.25, 1, 0.5, 1)`
               : 'none',
           }"
         >
-          <div class="highlight-border-flow"></div>
-          <div
-            v-if="showPulse"
-            class="absolute inset-0 rounded-[inherit] pointer-events-none animate-pulse-ring"
-          ></div>
+          <!-- 旋转的霓虹渐变背景层，通过 mask 将中间内容区域抠空 -->
+          <div class="gradient-aura-container">
+            <div class="gradient-aura"></div>
+          </div>
+          
+          <!-- 磨砂玻璃感的边框描边线 -->
+          <div class="glass-border-v2"></div>
         </div>
 
         <slot name="default" />
@@ -245,25 +250,26 @@ const slots = defineSlots<{
 </template>
 
 <style scoped>
-.highlight-glow-box {
-  box-shadow: 0px -5px 25px 0px rgba(186, 66, 255, 0.5), 0px 5px 25px 0px rgba(0, 225, 255, 0.5);
+/* 容器基本样式，提供外层发光 */
+.highlight-glow-box-v2 {
+  position: absolute;
   background: transparent;
+  box-shadow: 
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 4px 16px var(--glow-spread) rgba(31, 38, 135, 0.15);
 }
 
-.highlight-border-flow {
+/* 旋转渐变容器：定位并裁切中间 */
+.gradient-aura-container {
   position: absolute;
-  inset: -2px;
+  inset: var(--glow-inset); /* 向外溢出以展示发光范围 */
   border-radius: inherit;
-  padding: 2px;
-  background-image: conic-gradient(
-    from var(--angle),
-    rgb(186, 66, 255) 0%,
-    rgb(0, 225, 255) 25%,
-    rgb(186, 66, 255) 50%,
-    rgb(0, 225, 255) 75%,
-    rgb(186, 66, 255) 100%
-  );
-  animation: spinning82341 2.5s linear infinite;
+  overflow: hidden;
+  z-index: -1;
+  filter: var(--glow-blur-filter);
+  padding: var(--glow-padding); /* padding 匹配 inset 大小，从而定义 content-box 的范围 */
+  
+  /* 抠空中间：content-box（高亮框内部）设为透明，仅显示 border/padding 区域 */
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude;
@@ -271,34 +277,45 @@ const slots = defineSlots<{
 }
 
 @property --angle {
-  syntax: '<angle>';
+  syntax: "<angle>";
   initial-value: 0deg;
   inherits: false;
 }
 
-@keyframes spinning82341 {
-  0% {
-    --angle: 0deg;
-  }
-  100% {
+/* 旋转彩虹霓虹光效：使用锥形渐变自适应任意宽高比 */
+.gradient-aura {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--angle) at 50% 50%,
+    hsl(226, 81%, 64%),
+    hsl(271, 81%, 64%),
+    hsl(316, 81%, 64%),
+    hsl(1, 81%, 64%),
+    hsl(46, 81%, 64%),
+    hsl(91, 81%, 64%),
+    hsl(136, 81%, 64%),
+    hsl(181, 81%, 64%),
+    hsl(226, 81%, 64%)
+  );
+  animation: rotate-rainbow 4s linear infinite;
+}
+
+/* 磨砂玻璃边框线 */
+.glass-border-v2 {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  pointer-events: none;
+}
+
+@keyframes rotate-rainbow {
+  to {
     --angle: 360deg;
   }
 }
 
-@keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(186, 66, 255, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 12px rgba(0, 225, 255, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(0, 225, 255, 0);
-  }
-}
-
-.animate-pulse-ring {
-  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
 </style>
-

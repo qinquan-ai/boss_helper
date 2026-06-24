@@ -50,6 +50,13 @@ def main():
     # 完成
     final = DIST / "BOSS直聘助手"
     if final.exists():
+        # 4. 拷贝使用说明.txt
+        txt_guide = ROOT / "使用说明.txt"
+        if txt_guide.exists():
+            print("\n[Step 4/4] 正在拷贝使用说明到发布目录...")
+            shutil.copy2(txt_guide, final / "使用说明.txt")
+            print("[OK] 拷贝使用说明.txt 完成")
+
         size = sum(f.stat().st_size for f in final.rglob("*") if f.is_file())
         size_mb = size / 1024 / 1024
         print(f"\n{'='*60}")
@@ -57,6 +64,7 @@ def main():
         print(f"输出目录: {final}")
         print(f"文件大小: ~{size_mb:.1f} MB")
         print(f"主程序:   {final / 'BOSS直聘助手.exe'}")
+        print(f"说明文档: {final / '使用说明.txt'}")
         print(f"{'='*60}\n")
     else:
         print("[WARN] 打包完成，但未找到预期输出目录。请检查 PyInstaller 输出。")

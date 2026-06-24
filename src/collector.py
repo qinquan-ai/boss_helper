@@ -192,12 +192,50 @@ def _reconnect_boss(browser, ctrl):
     return True
 
 
-def _goto_search(browser, query, city_code, ctrl):
-    """按关键词（+城市）导航到 BOSS 搜索结果页，并等待列表。返回 _wait_search_ready 的状态。"""
+def get_salary_code(salary_min, salary_max):
+    # Normalize None / 0
+    s_min = salary_min if salary_min is not None else 0
+    s_max = salary_max if salary_max is not None else 0
+    if s_min == 0 and s_max == 3:
+        return "402"
+    elif s_min == 3 and s_max == 5:
+        return "403"
+    elif s_min == 5 and s_max == 10:
+        return "404"
+    elif s_min == 10 and s_max == 20:
+        return "405"
+    elif s_min == 20 and s_max == 50:
+        return "406"
+    elif s_min == 50 and s_max == 0:
+        return "407"
+    return None
+
+
+def _goto_search(browser, query, city_code, ctrl, job_type="", degrees=None, experience=None, salary_min=None, salary_max=None, salary_fuzzy=False):
+    """按关键词（+城市等筛选）导航到 BOSS 搜索结果页，并等待列表。返回 _wait_search_ready 的状态。"""
+    params = []
     if city_code:
-        url = f"https://www.zhipin.com/web/geek/jobs?city={city_code}&query=" + quote(query)
-    else:
-        url = "https://www.zhipin.com/web/geek/jobs?query=" + quote(query)
+        params.append(f"city={city_code}")
+    if query:
+        params.append(f"query={quote(query)}")
+    if not salary_fuzzy:
+        if salary_code := get_salary_code(salary_min, salary_max):
+            params.append(f"salary={salary_code}")
+    if job_type:
+        params.append(f"jobType={job_type}")
+    if degrees:
+        deg_str = ",".join(str(d) for d in degrees if d)
+        if deg_str:
+            params.append(f"degree={deg_str}")
+    if experience:
+        exp_str = ",".join(str(e) for e in experience if e)
+        if exp_str:
+            params.append(f"experience={exp_str}")
+
+    url = "https://www.zhipin.com/web/geek/jobs"
+    if params:
+        url += "?" + "&".join(params)
+
     ctrl.log(f"    导航至: {url}")
     # [H3] 记录导航开始
     _dt("H3", "_goto_search", "nav_start", {"url": url})
@@ -229,7 +267,8 @@ def _goto_search(browser, query, city_code, ctrl):
 def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
                    browser_type="chrome", tag=None, controller=None,
                    keyword_search=True, query="", city_code=None, city_name=None,
-                   salary_min=None, salary_max=None, tag_sync=False):
+                   salary_min=None, salary_max=None, tag_sync=False,
+                   job_type="", degrees=None, experience=None, salary_fuzzy=False):
     ctrl = controller or ConsoleController()
 
     if fast:
@@ -434,20 +473,68 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
         current = _current_url(browser)
         is_already_on_target = False
 
+        from urllib.parse import urlparse, parse_qs
+        parsed_url = urlparse(current)
+
         _dt("collect-start", "run_collection.page_reuse_check", "check_begin", {
             "current_url": current,
             "query": query,
-            "city_code": city_code
+            "city_code": city_code,
+            "job_type": job_type,
+            "degrees": degrees,
+            "experience": experience,
+            "salary_min": salary_min,
+            "salary_max": salary_max
         })
 
         if "zhipin.com/web/geek/job" in current:
-            query_match = (query in current) or (quote(query) in current)
-            city_match = f"city={city_code}" in current if city_code else True
-            _dt("collect-start", "run_collection.page_reuse_check", "url_matched", {
+            qs = parse_qs(parsed_url.query)
+            
+            # 1. Query match (comparing decoded query string)
+            current_query = qs.get("query", [""])[0]
+            query_match = (current_query == query)
+            
+            # 2. City match
+            current_city = qs.get("city", [""])[0]
+            expected_city = str(city_code) if city_code else ""
+            city_match = (current_city == expected_city)
+            
+            # 3. Salary match
+            if salary_fuzzy:
+                expected_salary_code = ""
+            else:
+                expected_salary_code = get_salary_code(salary_min, salary_max) or ""
+            current_salary = qs.get("salary", [""])[0]
+            salary_match = (current_salary == expected_salary_code)
+            
+            # 4. Job Type match
+            expected_job_type = str(job_type) if job_type else ""
+            current_job_type = qs.get("jobType", [""])[0]
+            job_type_match = (current_job_type == expected_job_type)
+            
+            # 5. Degree match
+            current_degree_str = qs.get("degree", [""])[0]
+            current_degrees = [d for d in current_degree_str.split(",") if d] if current_degree_str else []
+            expected_degrees = [str(d) for d in (degrees or []) if d]
+            degree_match = (set(current_degrees) == set(expected_degrees))
+            
+            # 6. Experience match
+            current_exp_str = qs.get("experience", [""])[0]
+            current_exps = [e for e in current_exp_str.split(",") if e] if current_exp_str else []
+            expected_exps = [str(e) for e in (experience or []) if e]
+            experience_match = (set(current_exps) == set(expected_exps))
+
+            _dt("collect-start", "run_collection.page_reuse_check", "match_results", {
                 "query_match": query_match,
-                "city_match": city_match
+                "city_match": city_match,
+                "salary_match": salary_match,
+                "job_type_match": job_type_match,
+                "degree_match": degree_match,
+                "experience_match": experience_match
             })
-            if query_match and city_match:
+            
+            if (query_match and city_match and salary_match and 
+                    job_type_match and degree_match and experience_match):
                 login_state, login_src = _probe_login(browser)
                 _dt("collect-start", "run_collection.page_reuse_check", "login_check", {
                     "login_state": login_state,
@@ -476,7 +563,15 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
             _dt("L3", "run_collection", "navigation_start", {"query": query, "city": city_name or city_code or "current"})
             ctrl.log(f"\n[*] 自动搜索: 关键词='{query}' 城市='{city_name or city_code or '当前城市'}'")
 
-            nav_status = _goto_search(browser, query, city_code, ctrl)
+            nav_status = _goto_search(
+                browser, query, city_code, ctrl,
+                job_type=job_type,
+                degrees=degrees,
+                experience=experience,
+                salary_min=salary_min,
+                salary_max=salary_max,
+                salary_fuzzy=salary_fuzzy
+            )
             _dt("L3", "run_collection", "goto_search_done", {"status": nav_status})
 
         # ── L4: 搜索结果等待循环（重连后 / 验证后 / 页面卡住时复用）────
@@ -545,7 +640,15 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
 
                 # L2→L3: 登录确认后重新导航
                 _dt("L3", "run_collection", "relayout_after_relogin", {"query": query})
-                nav_status = _goto_search(browser, query, city_code, ctrl)
+                nav_status = _goto_search(
+                    browser, query, city_code, ctrl,
+                    job_type=job_type,
+                    degrees=degrees,
+                    experience=experience,
+                    salary_min=salary_min,
+                    salary_max=salary_max,
+                    salary_fuzzy=salary_fuzzy
+                )
                 _dt("L3", "run_collection", "relayout_done", {"status": nav_status})
             else:
                 # timeout：已登录但页面加载慢
@@ -558,7 +661,15 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
                 _dt("L1", "run_collection", "reconnect_after_timeout_wait")
                 if not _reconnect_boss(browser, ctrl):
                     ctrl.log("   [!] 未找到可用的 BOSS 标签页，请确认浏览器未被关闭")
-                nav_status = _goto_search(browser, query, city_code, ctrl)
+                nav_status = _goto_search(
+                    browser, query, city_code, ctrl,
+                    job_type=job_type,
+                    degrees=degrees,
+                    experience=experience,
+                    salary_min=salary_min,
+                    salary_max=salary_max,
+                    salary_fuzzy=salary_fuzzy
+                )
                 _dt("L3", "run_collection", "relayout_after_timeout", {"status": nav_status})
 
         # ── L4: 搜索结果已加载，继续 Step 3 ─────────────────────────
@@ -567,7 +678,9 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
         if salary_min is not None or salary_max is not None:
             lo = salary_min if salary_min is not None else "-"
             hi = salary_max if salary_max is not None else "-"
-            ctrl.log(f"    [*] 初始薪资过滤: {lo}K ~ {hi}K（不可解析的如「面议」保留）")
+            ctrl.log(f"    [*] 初始薪资过滤: {lo}K ~ {hi}K")
+        if job_type or degrees or experience:
+            ctrl.log(f"    [*] 初始条件过滤: 工作性质={job_type or '不限'} 学历={degrees or '不限'} 经验={experience or '不限'}")
 
     # ===== Step 3: 准备数据提取层 =====
     ctrl.log("\n[Step 3] 初始化数据提取 ...")
@@ -634,7 +747,15 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
                     # 关键词路线：继续时重连活跃页面 + 按关键词重新导航，避免读到无关页面
                     _dt("H4", "run_collection", "empty_jobs_reconnect")
                     _reconnect_boss(browser, ctrl)
-                    _goto_search(browser, query, city_code, ctrl)
+                    _goto_search(
+                        browser, query, city_code, ctrl,
+                        job_type=job_type,
+                        degrees=degrees,
+                        experience=experience,
+                        salary_min=salary_min,
+                        salary_max=salary_max,
+                        salary_fuzzy=salary_fuzzy
+                    )
                 continue
 
         # 遍历当前列表中的岗位
