@@ -5,9 +5,9 @@
  */
 import { computed, ref } from "vue";
 import { useEngine } from "@/stores/engine";
-import { GlassSelect } from "@/ui";
+import { GlassSelect, GlassMultiSelect } from "@/ui";
 import { trace } from "@/utils/debugTracer";
-import ChipGroup from "./ChipGroup.vue";
+
 
 const props = defineProps<{
   keyword: string;
@@ -87,7 +87,7 @@ function onSalaryRangeChange(v: string) {
 }
 
 // chips 行折叠状态（仅控制下方 chips 行的展开/收起，不影响上方工具栏）
-const chipsExpanded = ref(true);
+const chipsExpanded = ref(false);
 </script>
 
 <template>
@@ -98,7 +98,7 @@ const chipsExpanded = ref(true);
       {{ props.filteredCount }} / {{ props.totalCount }} 条
     </span>
 
-    <div v-if="engine.resultFiles.length" class="w-52">
+    <div v-if="engine.resultFiles.length" class="min-w-52 max-w-80 w-auto">
       <GlassSelect
         :model-value="engine.currentFile || ''"
         :options="fileOptions"
@@ -129,44 +129,58 @@ const chipsExpanded = ref(true);
     />
 
     <button
-      v-if="props.hasActiveFilter"
-      class="btn-ghost !py-1.5 text-xs"
-      @click="emit('clear')"
-    >清空筛选</button>
+      class="btn-ghost !py-1.5 text-xs flex items-center gap-1.5"
+      :class="{ 'bg-white/10 text-fg border-glass-border-hover': chipsExpanded, 'text-accent border-accent/30': props.hasActiveFilter }"
+      @click="chipsExpanded = !chipsExpanded"
+      :title="chipsExpanded ? '隐藏筛选' : '展开筛选'"
+    >
+      <span>筛选</span>
+      <svg
+        class="transition-transform duration-200 opacity-60"
+        :class="{ 'rotate-180': chipsExpanded }"
+        width="10"
+        height="10"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="3"
+      >
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+      <span v-if="props.hasActiveFilter" class="w-1.5 h-1.5 rounded-full bg-accent shrink-0"></span>
+    </button>
 
     <button class="btn-ghost !py-1.5 text-xs" @click="refresh">刷新</button>
   </div>
 
-  <!-- ============================== 集合筛选条（chips，可折叠） ============================== -->
-  <button
-    class="flex items-center gap-2 px-4 py-1.5 border-b border-bg-border w-full text-left text-[11px] text-fg-subtle hover:bg-bg-raised/40 transition-colors"
-    @click="chipsExpanded = !chipsExpanded"
-    :title="chipsExpanded ? '收起筛选条件' : '展开筛选条件'"
-  >
-    <span>筛选条件</span>
-    <span v-if="props.hasActiveFilter" class="text-accent">· 已启用</span>
-    <div class="flex-1"></div>
-    <span class="transition-transform" :class="chipsExpanded ? 'rotate-180' : ''">▾</span>
-  </button>
   <transition name="chip-collapse">
     <div
       v-if="chipsExpanded"
-      class="px-4 py-2 border-b border-bg-border flex flex-wrap gap-x-4 gap-y-1.5"
+      class="px-4 py-2 border-b border-bg-border flex flex-wrap gap-2 items-center"
     >
-      <ChipGroup label="城市" :model-value="props.cityFilter" :options="props.cityOptions"
+      <GlassMultiSelect label="城市" :model-value="props.cityFilter" :options="props.cityOptions"
         @update:model-value="emit('update:cityFilter', $event)" />
-      <ChipGroup label="经验" :model-value="props.experienceFilter" :options="props.experienceOptions"
+      <GlassMultiSelect label="经验" :model-value="props.experienceFilter" :options="props.experienceOptions"
         @update:model-value="emit('update:experienceFilter', $event)" />
-      <ChipGroup label="学历" :model-value="props.degreeFilter" :options="props.degreeOptions"
+      <GlassMultiSelect label="学历" :model-value="props.degreeFilter" :options="props.degreeOptions"
         @update:model-value="emit('update:degreeFilter', $event)" />
-      <ChipGroup label="技能" :model-value="props.skillFilter" :options="props.skillOptions"
+      <GlassMultiSelect label="技能" :model-value="props.skillFilter" :options="props.skillOptions"
         @update:model-value="emit('update:skillFilter', $event)" />
-      <ChipGroup label="福利" :model-value="props.welfareFilter" :options="props.welfareOptions"
+      <GlassMultiSelect label="福利" :model-value="props.welfareFilter" :options="props.welfareOptions"
         @update:model-value="emit('update:welfareFilter', $event)" />
-      <ChipGroup label="岗位标签" :model-value="props.tagFilter" :options="props.tagOptions"
+      <GlassMultiSelect label="岗位标签" :model-value="props.tagFilter" :options="props.tagOptions"
         @update:model-value="emit('update:tagFilter', $event)" />
-      <ChipGroup label="公司标签" :model-value="props.companyLabelFilter" :options="props.companyLabelOptions"
+      <GlassMultiSelect label="公司标签" :model-value="props.companyLabelFilter" :options="props.companyLabelOptions"
         @update:model-value="emit('update:companyLabelFilter', $event)" />
+
+      <!-- 清空筛选（置于下拉列表末尾，避免顶部布局跳动） -->
+      <button
+        v-if="props.hasActiveFilter"
+        class="text-[11px] px-2.5 py-1 rounded-full border border-danger/30 text-danger hover:bg-danger/10 hover:border-danger/50 transition-all duration-200 ml-1 shrink-0"
+        @click="emit('clear')"
+      >
+        清空筛选
+      </button>
     </div>
   </transition>
 </template>
@@ -187,6 +201,6 @@ const chipsExpanded = ref(true);
 .chip-collapse-leave-from {
   opacity: 1;
   transform: translateY(0);
-  max-height: 400px;
+  max-height: 250px;
 }
 </style>

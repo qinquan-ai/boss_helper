@@ -5,7 +5,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { useEngine } from "@/stores/engine";
-import { GlassTag } from "@/ui";
+import { GlassTag, GlassCheckbox } from "@/ui";
 import { trace } from "@/utils/debugTracer";
 import type { Job } from "@/api";
 
@@ -281,45 +281,131 @@ function exportCsv() {
 // 列设置面板
 // ============================================================================
 const showColPanel = ref(false);
+
+function selectAllCols() {
+  COLUMNS.forEach((c) => {
+    visibleCols.value[c.key] = true;
+  });
+}
+function clearAllCols() {
+  COLUMNS.forEach((c) => {
+    visibleCols.value[c.key] = false;
+  });
+}
 </script>
 
 <template>
   <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
-    <!-- 工具栏：列设置 + 刷新 + CSV -->
+    <!-- 工具栏：列设置 + 全屏 + 导出 CSV -->
     <div class="flex items-center gap-2 px-4 py-2 border-b border-bg-border">
-      <button
-        class="btn-ghost !py-1.5 text-xs"
-        :class="{ 'is-on': showColPanel }"
-        @click="showColPanel = !showColPanel"
-      >列设置</button>
-      <span class="text-[11px] text-fg-subtle">{{ sortedJobs.length }} 行</span>
+      <span class="text-[11px] text-fg-subtle font-medium">{{ sortedJobs.length }} 行</span>
       <div class="flex-1"></div>
-      <button class="btn-primary !py-1.5 text-xs" @click="exportCsv">导出 CSV</button>
-    </div>
-
-    <!-- 列设置面板 -->
-    <transition name="slide-down">
-      <div
-        v-if="showColPanel"
-        class="px-4 py-3 border-b border-bg-border bg-bg-raised/40 grid gap-1.5"
-        style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
-      >
-        <label
-          v-for="c in COLUMNS"
-          :key="'vis-' + c.key"
-          class="flex items-center gap-2 text-xs text-fg-muted cursor-pointer select-none"
+      
+      <!-- 列设置 -->
+      <div class="relative" style="position: relative;">
+        <button
+          class="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 bg-white/5 hover:bg-white/10 text-fg-muted hover:text-fg border border-bg-border"
+          :class="{ 'bg-white/15 text-fg border-glass-border-hover': showColPanel }"
+          title="列设置"
+          @click="showColPanel = !showColPanel"
         >
-          <input
-            type="checkbox"
-            :checked="visibleCols[c.key]"
-            class="gcheck-native"
-            @change="visibleCols[c.key] = ($event.target as HTMLInputElement).checked"
-          />
-          <span>{{ c.title }}</span>
-          <span class="text-[10px] text-fg-subtle ml-auto">{{ colWidths[c.key] }}px</span>
-        </label>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <line x1="9" y1="3" x2="9" y2="21" />
+            <line x1="15" y1="3" x2="15" y2="21" />
+          </svg>
+        </button>
+        
+        <!-- 列设置下拉面板 -->
+        <transition name="gselect-pop">
+          <div
+            v-if="showColPanel"
+            class="absolute right-full mr-2.5 top-0 z-50 w-48 p-2.5 rounded-xl bg-bg-panel border border-bg-border shadow-xl backdrop-blur-md flex flex-col gap-2"
+          >
+            <div class="text-[11px] font-semibold text-fg-subtle border-b border-bg-border/60 pb-1.5 mb-0.5 flex items-center justify-between">
+              <span>显示列配置</span>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="text-[10px] text-brand hover:underline font-normal cursor-pointer select-none"
+                  @click="selectAllCols"
+                >全选</button>
+                <button
+                  type="button"
+                  class="text-[10px] text-danger hover:underline font-normal cursor-pointer select-none"
+                  @click="clearAllCols"
+                >清空</button>
+              </div>
+            </div>
+            <div class="max-h-60 overflow-y-auto flex flex-col gap-2 scrollbar-thin">
+              <label
+                v-for="c in COLUMNS"
+                :key="'vis-' + c.key"
+                class="flex items-center gap-2.5 text-xs text-fg-muted hover:text-fg cursor-pointer select-none transition-colors"
+              >
+                <GlassCheckbox
+                  :model-value="visibleCols[c.key]"
+                  @update:model-value="(v) => visibleCols[c.key] = v"
+                />
+                <span>{{ c.title }}</span>
+              </label>
+            </div>
+          </div>
+        </transition>
+        
+        <!-- 点击外部关闭的 backdrop -->
+        <div v-if="showColPanel" class="fixed inset-0 z-40" @click="showColPanel = false" />
       </div>
-    </transition>
+
+      <!-- 全屏 -->
+      <button
+        class="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 bg-white/5 hover:bg-white/10 text-fg-muted hover:text-fg border border-bg-border"
+        :class="{ 'bg-white/15 text-fg border-glass-border-hover': engine.isFullscreen }"
+        @click="engine.isFullscreen = !engine.isFullscreen"
+        :title="engine.isFullscreen ? '退出全屏' : '全屏'"
+      >
+        <svg
+          v-if="!engine.isFullscreen"
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+        </svg>
+        <svg
+          v-else
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M4 14h6v6m10-6h-6v6M4 10h6V4m10 6h-6V4" />
+        </svg>
+      </button>
+
+      <button class="btn-primary !py-1.5 text-xs ml-1" @click="exportCsv">导出 CSV</button>
+    </div>
 
     <!-- 表格 -->
     <div class="table-resize-wrap flex-1 overflow-auto">
@@ -413,20 +499,14 @@ const showColPanel = ref(false);
 </template>
 
 <style scoped>
-.slide-down-enter-active,
-.slide-down-leave-active {
-  transition: max-height 0.2s ease, opacity 0.2s ease;
-  overflow: hidden;
+.gselect-pop-enter-active,
+.gselect-pop-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
-.slide-down-enter-from,
-.slide-down-leave-to {
-  max-height: 0;
+.gselect-pop-enter-from,
+.gselect-pop-leave-to {
   opacity: 0;
-}
-.slide-down-enter-to,
-.slide-down-leave-from {
-  max-height: 200px;
-  opacity: 1;
+  transform: translateY(-4px);
 }
 
 /* 常驻分隔线 + 拖拽热区 */
@@ -472,37 +552,5 @@ const showColPanel = ref(false);
 
 .row-job {
   transition: background-color 0.12s ease;
-}
-
-.gcheck-native {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  border: 1px solid var(--glass-border);
-  background: var(--glass-bg);
-  cursor: pointer;
-  flex-shrink: 0;
-  position: relative;
-  margin: 0;
-}
-.gcheck-native:checked {
-  background: var(--accent);
-  border-color: transparent;
-}
-.gcheck-native:checked::after {
-  content: "";
-  position: absolute;
-  left: 3px; top: 0px;
-  width: 4px; height: 8px;
-  border-right: 2px solid var(--accent-fg);
-  border-bottom: 2px solid var(--accent-fg);
-  transform: rotate(45deg);
-}
-
-.btn-ghost.is-on {
-  background: var(--accent);
-  color: var(--accent-fg);
 }
 </style>

@@ -84,7 +84,7 @@ def _load_env() -> dict[str, str]:
         "BOSS_DEV_VITE_PORT": "5173",
         "BOSS_OUTPUT_DIR": "output/",
         "DEBUG_TRACE": "true",
-        "DEBUG_TRACE_SCOPES": "*",
+        "DEBUG_TRACE_SCOPES": "collect-start,error",
     }
     if os.path.exists(_ENV_FILE):
         with open(_ENV_FILE, "r", encoding="utf-8") as f:
@@ -98,6 +98,10 @@ def _load_env() -> dict[str, str]:
     return defaults
 
 _tenv = _load_env()
+
+# 将所有加载的环境变量和默认值注入到 os.environ，供子线程和模块使用
+for k, v in _tenv.items():
+    os.environ.setdefault(k, v)
 
 def _env(key: str, default: str = "") -> str:
     return _tenv.get(key, default)

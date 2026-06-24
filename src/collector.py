@@ -430,18 +430,54 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
                 # 仍未登录，继续循环等待
                 ctrl.log("   [!] 仍未确认登录态，请确认扫码成功并在 APP 端点击确认")
 
-        # ── L2 → L3: 前置登录检测通过后，才进入导航 ─────────────────
-        if not _ensure_logged_in():
-            ctrl.log("\n[*] 已停止")
-            browser.disconnect()
-            ctrl.status("stopped")
-            return
+        # 检查当前浏览器是否已经处于目标搜索页，避免重新载入页面
+        current = _current_url(browser)
+        is_already_on_target = False
 
-        _dt("L3", "run_collection", "navigation_start", {"query": query, "city": city_name or city_code or "current"})
-        ctrl.log(f"\n[*] 自动搜索: 关键词='{query}' 城市='{city_name or city_code or '当前城市'}'")
+        _dt("collect-start", "run_collection.page_reuse_check", "check_begin", {
+            "current_url": current,
+            "query": query,
+            "city_code": city_code
+        })
 
-        nav_status = _goto_search(browser, query, city_code, ctrl)
-        _dt("L3", "run_collection", "goto_search_done", {"status": nav_status})
+        if "zhipin.com/web/geek/job" in current:
+            query_match = (query in current) or (quote(query) in current)
+            city_match = f"city={city_code}" in current if city_code else True
+            _dt("collect-start", "run_collection.page_reuse_check", "url_matched", {
+                "query_match": query_match,
+                "city_match": city_match
+            })
+            if query_match and city_match:
+                login_state, login_src = _probe_login(browser)
+                _dt("collect-start", "run_collection.page_reuse_check", "login_check", {
+                    "login_state": login_state,
+                    "login_src": login_src
+                })
+                if login_state == "in":
+                    is_already_on_target = True
+
+        _dt("collect-start", "run_collection.page_reuse_check", "check_end", {
+            "is_already_on_target": is_already_on_target
+        })
+
+        if is_already_on_target:
+            ctrl.log("   [+] [智能优化] 浏览器已处于目标页面，跳过页面重载，已激活「无缝续接」整理模式！")
+            nav_status = "ok"
+            if hasattr(ctrl, "events"):
+                ctrl.events.put({"type": "seamless_mode", "enabled": True})
+        else:
+            # ── L2 → L3: 前置登录检测通过后，才进入导航 ─────────────────
+            if not _ensure_logged_in():
+                ctrl.log("\n[*] 已停止")
+                browser.disconnect()
+                ctrl.status("stopped")
+                return
+
+            _dt("L3", "run_collection", "navigation_start", {"query": query, "city": city_name or city_code or "current"})
+            ctrl.log(f"\n[*] 自动搜索: 关键词='{query}' 城市='{city_name or city_code or '当前城市'}'")
+
+            nav_status = _goto_search(browser, query, city_code, ctrl)
+            _dt("L3", "run_collection", "goto_search_done", {"status": nav_status})
 
         # ── L4: 搜索结果等待循环（重连后 / 验证后 / 页面卡住时复用）────
         while nav_status != "ok":

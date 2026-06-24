@@ -57,6 +57,8 @@ interface State {
   citiesRefreshing: boolean;
   stopping: boolean;
   pausing: boolean;
+  isFullscreen: boolean; // 新增全屏状态
+  seamlessMode: boolean;
 }
 
 let logSeq = 0;
@@ -107,6 +109,8 @@ export const useEngine = defineStore("engine", {
     citiesRefreshing: false,
     stopping: false,
     pausing: false,
+    isFullscreen: false,
+    seamlessMode: false,
   }),
 
   getters: {
@@ -152,7 +156,7 @@ export const useEngine = defineStore("engine", {
           () => this.params,
           () => _debouncedSaveParams(
             () => this.params as unknown as Record<string, unknown>,
-            (p) => api.saveStartParams(p as any)
+            async (p) => { await api.saveStartParams(p as any); }
           ),
           { deep: true }
         );
@@ -193,6 +197,7 @@ export const useEngine = defineStore("engine", {
       }
       this.state = "running";
       this.running = true;
+      this.seamlessMode = false;
       this.connectWs();
     },
 
@@ -300,6 +305,7 @@ export const useEngine = defineStore("engine", {
       this.stopping = false;
       this.pausing = false;
       this.running = false;
+      this.seamlessMode = false;
       if (this.state === "running" || this.state === "waiting" || this.state === "paused") this.state = "stopped";
       this.pendingAction = null;
       trace.endScope("collect-stop");
@@ -391,6 +397,7 @@ export const useEngine = defineStore("engine", {
             this.running = false;
             this.stopping = false;
             this.pausing = false;
+            this.seamlessMode = false;
             this.loadResults();
             if (ev.state === "done") {
               sound.play("done");
@@ -401,6 +408,7 @@ export const useEngine = defineStore("engine", {
             this.running = false;
             this.stopping = false;
             this.pausing = false;
+            this.seamlessMode = false;
             if (this.stopping || String(ev.detail ?? "").includes("被停止")) {
               this.state = "stopped";
             }
@@ -419,6 +427,9 @@ export const useEngine = defineStore("engine", {
           sound.play("alert");
           try { (window as any).pywebview?.api?.flash_taskbar?.(6); } catch { /* 静默 */ }
           trace.action("engine:handleEvent", "需要用户操作", { reason: ev.reason, kind: ev.kind });
+          break;
+        case "seamless_mode":
+          this.seamlessMode = ev.enabled;
           break;
       }
     },

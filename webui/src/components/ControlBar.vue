@@ -3,6 +3,14 @@ import { computed } from "vue";
 import { useEngine } from "@/stores/engine";
 import { useLocalStorage } from "@/composables/useLocalStorage";
 
+defineProps<{
+  tab: "logs" | "results";
+}>();
+
+const emit = defineEmits<{
+  (e: "update:tab", v: "logs" | "results"): void;
+}>();
+
 const engine = useEngine();
 
 const statsCollapsed = useLocalStorage<boolean>(
@@ -35,11 +43,43 @@ const metrics = [
 </script>
 
 <template>
-  <div class="card p-5">
-    <div class="flex items-center gap-4">
-      <div class="flex items-center gap-2.5">
-        <span class="w-2.5 h-2.5 rounded-full" :class="stateColor"></span>
-        <span class="text-sm font-semibold text-fg">{{ engine.statusLabel }}</span>
+  <div class="card py-2.5 px-4 relative overflow-hidden">
+    <div class="flex items-center gap-4 flex-wrap sm:flex-nowrap">
+      <!-- Tab 切换栏 -->
+      <div class="flex gap-0.5 bg-bg-base/60 border border-bg-border rounded-lg p-0.5 shrink-0">
+        <button
+          type="button"
+          class="px-3 py-1 rounded-md text-xs transition-colors"
+          :class="tab === 'logs' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
+          @click="emit('update:tab', 'logs')"
+        >
+          实时日志
+        </button>
+        <button
+          type="button"
+          class="px-3 py-1 rounded-md text-xs transition-colors"
+          :class="tab === 'results' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
+          @click="emit('update:tab', 'results'); engine.loadResults()"
+        >
+          岗位列表
+        </button>
+      </div>
+
+      <!-- 运行状态与进度文字 -->
+      <div class="flex items-center gap-2 text-xs">
+        <span class="w-2 h-2 rounded-full" :class="stateColor"></span>
+        <span class="font-medium text-fg-muted">
+          {{ engine.statusLabel }}
+          <span v-if="engine.running && engine.progress.total > 0" class="text-fg-subtle ml-1">
+            ({{ engine.progress.done }} / {{ engine.progress.total }})
+          </span>
+        </span>
+        <span
+          v-if="engine.running && engine.seamlessMode"
+          class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-medium"
+        >
+          无缝续接中
+        </span>
         <span
           v-if="!engine.wsConnected && engine.running"
           class="text-[11px] text-amber-500"
@@ -47,8 +87,9 @@ const metrics = [
         >
       </div>
 
-      <div class="flex-1"></div>
+      <div class="flex-1 min-w-0"></div>
 
+      <!-- 展开统计按钮 -->
       <button
         type="button"
         class="w-7 h-7 rounded-full flex items-center justify-center transition-fast bg-white/5 hover:bg-white/10 text-fg-muted hover:text-fg"
@@ -75,18 +116,19 @@ const metrics = [
         </svg>
       </button>
 
+      <!-- 采集操作按钮 -->
       <!-- 暂停 / 继续（仅运行中可见） -->
       <template v-if="engine.running && engine.state !== 'paused'">
         <button
           v-if="engine.pausing"
-          class="btn-ghost opacity-60 cursor-not-allowed"
+          class="btn-ghost !py-1 !px-2.5 text-xs opacity-60 cursor-not-allowed"
           disabled
         >
           暂停中…
         </button>
         <button
           v-else
-          class="btn-ghost"
+          class="btn-ghost !py-1 !px-2.5 text-xs"
           :disabled="!engine.running"
           title="暂停采集，可稍后继续"
           @click="engine.pause()"
@@ -98,7 +140,7 @@ const metrics = [
       <!-- 继续（暂停时可见） -->
       <button
         v-if="engine.state === 'paused'"
-        class="btn-primary"
+        class="btn-primary !py-1 !px-2.5 text-xs"
         title="继续采集"
         @click="engine.resume()"
       >
@@ -108,7 +150,7 @@ const metrics = [
       <!-- 停止（运行中或暂停时可见） -->
       <button
         v-if="engine.running || engine.state === 'paused'"
-        class="btn-danger"
+        class="btn-danger !py-1 !px-2.5 text-xs"
         :disabled="engine.stopping"
         :class="{ 'opacity-60 cursor-not-allowed': engine.stopping }"
         @click="engine.stop()"
@@ -119,7 +161,7 @@ const metrics = [
       <!-- 启动（仅空闲时可见） -->
       <button
         v-if="!engine.running && engine.state !== 'paused'"
-        class="btn-primary"
+        class="btn-primary !py-1 !px-2.5 text-xs"
         :disabled="!engine.canStart"
         :title="
           engine.params.keyword_search && !engine.params.query?.trim()
@@ -132,18 +174,12 @@ const metrics = [
       </button>
     </div>
 
-    <!-- 进度条 -->
-    <div class="mt-4">
-      <div class="flex justify-between text-xs text-fg-muted mb-1.5">
-        <span>进度 {{ engine.progress.done }} / {{ engine.progress.total }}</span>
-        <span>{{ engine.percent }}%</span>
-      </div>
-      <div class="h-2 rounded-full bg-bg-raised overflow-hidden">
-        <div
-          class="h-full bg-brand rounded-full transition-all duration-500"
-          :style="{ width: engine.percent + '%' }"
-        ></div>
-      </div>
+    <!-- Slim 贴底极简进度条 -->
+    <div v-if="engine.running" class="absolute bottom-0 left-0 right-0 h-[2px] bg-bg-raised/40 overflow-hidden">
+      <div
+        class="h-full bg-brand rounded-full transition-all duration-500"
+        :style="{ width: engine.percent + '%' }"
+      ></div>
     </div>
 
     <!-- 统计区：可折叠 -->
@@ -151,16 +187,16 @@ const metrics = [
       class="grid transition-all duration-300 ease-out"
       :class="statsCollapsed
         ? 'grid-rows-[0fr] opacity-0 mt-0'
-        : 'grid-rows-[1fr] opacity-100 mt-4'"
+        : 'grid-rows-[1fr] opacity-100 mt-3'"
     >
       <div class="overflow-hidden">
-        <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
-          <div v-for="m in metrics" :key="m.k" class="tile px-3 py-2 text-center">
-            <div class="text-lg font-semibold" :class="m.cls">{{ stats[m.k] || 0 }}</div>
-            <div class="text-[11px] text-fg-subtle">{{ m.label }}</div>
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-3 pt-3 border-t border-bg-border/40">
+          <div v-for="m in metrics" :key="m.k" class="tile px-3 py-1.5 text-center">
+            <div class="text-base font-semibold" :class="m.cls">{{ stats[m.k] || 0 }}</div>
+            <div class="text-[10px] text-fg-subtle">{{ m.label }}</div>
           </div>
         </div>
-        <p v-if="engine.errorMsg" class="mt-3 text-xs text-rose-500">{{ engine.errorMsg }}</p>
+        <p v-if="engine.errorMsg" class="mt-2.5 text-xs text-rose-500">{{ engine.errorMsg }}</p>
       </div>
     </div>
   </div>

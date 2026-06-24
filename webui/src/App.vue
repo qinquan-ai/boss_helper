@@ -74,7 +74,7 @@ onMounted(async () => {
 
 <template>
   <div class="h-screen flex flex-col">
-    <header class="flex items-center gap-3 px-6 py-3.5 border-b border-bg-border bg-bg-panel">
+    <header v-if="!engine.isFullscreen" class="flex items-center gap-3 px-6 py-3.5 border-b border-bg-border bg-bg-panel">
       <div class="w-8 h-8 rounded-xl bg-bg-raised border border-bg-border flex items-center justify-center text-fg font-bold">B</div>
       <div>
         <h1 class="text-base font-semibold text-fg leading-tight">BOSS 直聘助手</h1>
@@ -98,6 +98,7 @@ onMounted(async () => {
       <div id="main-split-container" class="flex h-full w-full">
         <!-- 左侧配置面板 -->
         <div
+          v-if="!engine.isFullscreen"
           :style="{ flex: `0 0 ${configCollapsed ? '4%' : leftPanelWidth + 'px'}` }"
           class="flex flex-col overflow-hidden"
         >
@@ -105,9 +106,9 @@ onMounted(async () => {
           <CollapsedConfigPanel v-show="configCollapsed" class="h-full" @expand="onExpand" />
         </div>
 
-        <!-- 拖拽手柄（仅展开时显示） -->
+        <!-- 拖拽手柄（仅展开且非全屏时显示） -->
         <div
-          v-show="!configCollapsed"
+          v-if="!configCollapsed && !engine.isFullscreen"
           class="group relative flex w-2 items-center justify-center hover:bg-brand/10 transition-colors cursor-col-resize"
           @mousedown.prevent="onDragStart"
         >
@@ -116,27 +117,13 @@ onMounted(async () => {
 
         <!-- 右侧主内容区 -->
         <div class="flex flex-1 flex-col overflow-hidden min-w-0">
-          <section class="flex flex-col gap-4 min-w-0 p-4 overflow-y-auto h-full">
-            <ControlBar />
+          <section
+            class="flex flex-col min-w-0 overflow-hidden flex-1 min-h-0"
+            :class="engine.isFullscreen ? 'p-1.5 gap-0' : 'p-4 gap-4'"
+          >
+            <ControlBar v-if="!engine.isFullscreen" v-model:tab="tab" />
 
-            <div class="flex gap-1 bg-bg-panel border border-bg-border rounded-xl p-1 w-fit">
-              <button
-                class="px-4 py-1.5 rounded-lg text-sm transition-colors"
-                :class="tab === 'logs' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
-                @click="tab = 'logs'"
-              >
-                实时日志
-              </button>
-              <button
-                class="px-4 py-1.5 rounded-lg text-sm transition-colors"
-                :class="tab === 'results' ? 'bg-brand text-bg-base font-medium' : 'text-fg-muted hover:text-fg'"
-                @click="tab = 'results'; engine.loadResults()"
-              >
-                岗位列表
-              </button>
-            </div>
-
-            <div class="min-h-[480px]">
+            <div class="flex-1 min-h-0 flex flex-col">
               <LogConsole v-show="tab === 'logs'" />
               <ResultTable v-show="tab === 'results'" />
             </div>

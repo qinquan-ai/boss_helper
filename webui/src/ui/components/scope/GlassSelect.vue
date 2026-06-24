@@ -146,6 +146,15 @@ function pick(o: Opt) {
   opacity: 0.45;
   cursor: not-allowed;
 }
+.gselect__value,
+.gselect__ph {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
 .gselect__ph {
   color: var(--fg-subtle);
 }
