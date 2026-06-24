@@ -8,10 +8,12 @@ import ControlBar from "@/components/ControlBar.vue";
 import LogConsole from "@/components/LogConsole.vue";
 import ResultTable from "@/components/ResultTable";
 import ActionDialog from "@/components/ActionDialog.vue";
+import OnboardingTour from "@/components/OnboardingTour.vue";
 
 const engine = useEngine();
 const { mode, toggle } = useTheme();
 const tab = ref<"logs" | "results">("logs");
+const showTour = ref(false);
 
 // 是否折叠配置面板
 const configCollapsed = ref(false);
@@ -69,6 +71,11 @@ onMounted(async () => {
   engine.connectWs();
   if (engine.running) engine.state = "running";
   leftPanelWidth.value = getDefaultWidthPx();
+  
+  const completed = localStorage.getItem("boss-helper:onboarding-completed");
+  if (completed !== "true") {
+    showTour.value = true;
+  }
 });
 </script>
 
@@ -80,6 +87,29 @@ onMounted(async () => {
         <h1 class="text-base font-semibold text-fg leading-tight">BOSS 直聘助手</h1>
       </div>
       <div class="flex-1"></div>
+      <button
+        class="w-8 h-8 rounded-full border border-bg-border text-fg-muted hover:text-fg hover:bg-bg-raised transition-colors flex items-center justify-center shrink-0"
+        title="使用引导"
+        aria-label="使用引导"
+        @click="showTour = true"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      </button>
       <button
         class="text-[12px] px-3 py-1.5 rounded-full border border-bg-border text-fg-muted hover:text-fg transition-colors"
         @click="toggle"
@@ -133,5 +163,6 @@ onMounted(async () => {
     </main>
 
     <ActionDialog />
+    <OnboardingTour v-model="showTour" />
   </div>
 </template>

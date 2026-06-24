@@ -105,7 +105,7 @@ watch(salaryRangeValue, (v) => {
 </script>
 
 <template>
-  <aside class="card p-5 w-full h-full flex flex-col gap-5 overflow-hidden lg:overflow-y-auto">
+  <aside id="config-panel" class="card p-5 w-full h-full flex flex-col gap-5 overflow-hidden lg:overflow-y-auto">
     <div class="flex items-start justify-between gap-2">
       <div>
         <h2 class="text-sm font-semibold text-fg mb-1">运行配置</h2>
@@ -137,7 +137,7 @@ watch(salaryRangeValue, (v) => {
     </div>
 
     <!-- 关键词搜索路线开关 -->
-    <div class="rounded-xl bg-bg-raised/60 border border-bg-border p-3">
+    <div id="keyword-search-card" class="rounded-xl bg-bg-raised/60 border border-bg-border p-3">
       <label class="flex items-center justify-between cursor-pointer">
         <span class="text-sm font-medium text-fg">关键词搜索</span>
         <GlassToggle v-model="engine.params.keyword_search" :disabled="engine.running" />

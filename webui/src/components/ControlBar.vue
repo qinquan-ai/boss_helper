@@ -43,10 +43,10 @@ const metrics = [
 </script>
 
 <template>
-  <div class="card py-2.5 px-4 relative overflow-hidden">
+  <div id="control-bar-main" class="card py-2.5 px-4 relative overflow-hidden">
     <div class="flex items-center gap-4 flex-wrap sm:flex-nowrap">
       <!-- Tab 切换栏 -->
-      <div class="flex gap-0.5 bg-bg-base/60 border border-bg-border rounded-lg p-0.5 shrink-0">
+      <div id="tab-bar" class="flex gap-0.5 bg-bg-base/60 border border-bg-border rounded-lg p-0.5 shrink-0">
         <button
           type="button"
           class="px-3 py-1 rounded-md text-xs transition-colors"
@@ -160,6 +160,7 @@ const metrics = [
 
       <!-- 启动（仅空闲时可见） -->
       <button
+        id="start-btn"
         v-if="!engine.running && engine.state !== 'paused'"
         class="btn-primary !py-1 !px-2.5 text-xs"
         :disabled="!engine.canStart"
