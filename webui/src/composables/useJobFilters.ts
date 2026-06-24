@@ -56,17 +56,12 @@ export function useJobFilters() {
   const engine = useEngine();
 
   const keyword = ref("");
-  const salaryMin = ref<number | null>(null);
-  const salaryMax = ref<number | null>(null);
+  const salaryFilter = ref<string[]>([]);
 
-  // 追踪 salaryMin/Max 写入
+  // 追踪 salaryFilter 写入
   watch(
-    () => salaryMin.value,
-    (v) => trace.api("useJobFilters:salaryMin", `salaryMin 写入: ${v}`, { salaryMin: v })
-  );
-  watch(
-    () => salaryMax.value,
-    (v) => trace.api("useJobFilters:salaryMax", `salaryMax 写入: ${v}`, { salaryMax: v })
+    () => salaryFilter.value,
+    (v) => trace.api("useJobFilters:salaryFilter", `salaryFilter 写入: ${v}`, { salaryFilter: v })
   );
 
   const cityFilter = ref<string[]>([]);
@@ -92,8 +87,15 @@ export function useJobFilters() {
   /** 经过所有筛选条件后的 job 列表。 */
   const filtered = computed(() => {
     const k = keyword.value.trim().toLowerCase();
-    const min = salaryMin.value;
-    const max = salaryMax.value;
+    const SALARY_MAPPING: Record<string, [number | null, number | null]> = {
+      "3K 以下": [null, 3],
+      "3-5K": [3, 5],
+      "5-10K": [5, 10],
+      "10-20K": [10, 20],
+      "20-50K": [20, 50],
+      "50K 以上": [50, null]
+    };
+
     const raw = (engine.jobs as any[]).filter((j) => {
       if (!singleMatch(cityFilter.value, j.location)) return false;
       if (!singleMatch(experienceFilter.value, j.experience)) return false;
@@ -103,8 +105,19 @@ export function useJobFilters() {
       if (!multiMatch(tagFilter.value, j.job_labels)) return false;
       if (!multiMatch(companyLabelFilter.value, j.company_labels)) return false;
 
-      if (min != null && j.salaryMin != null && j.salaryMin < min) return false;
-      if (max != null && j.salaryMax != null && j.salaryMax > max) return false;
+      if (salaryFilter.value.length > 0) {
+        if (j.salaryMin != null && j.salaryMax != null) {
+          const matched = salaryFilter.value.some((rangeName) => {
+            const mapped = SALARY_MAPPING[rangeName];
+            if (!mapped) return false;
+            const [fmin, fmax] = mapped;
+            if (fmin != null && j.salaryMax < fmin) return false;
+            if (fmax != null && j.salaryMin > fmax) return false;
+            return true;
+          });
+          if (!matched) return false;
+        }
+      }
 
       if (k) {
         const hay = [
@@ -127,8 +140,8 @@ export function useJobFilters() {
       }
       return true;
     });
-    trace.api("useJobFilters:filtered", `filtered 重算: ${raw.length} 条 (min=${min}, max=${max})`, {
-      min, max, totalJobs: engine.jobs.length, filteredCount: raw.length,
+    trace.api("useJobFilters:filtered", `filtered 重算: ${raw.length} 条 (salaryFilter=${salaryFilter.value.join(",")})`, {
+      salaryFilter: salaryFilter.value, totalJobs: engine.jobs.length, filteredCount: raw.length,
     });
     return raw;
   });
@@ -139,8 +152,7 @@ export function useJobFilters() {
   const hasActiveFilter = computed(
     () =>
       !!keyword.value.trim() ||
-      salaryMin.value != null ||
-      salaryMax.value != null ||
+      salaryFilter.value.length > 0 ||
       cityFilter.value.length > 0 ||
       experienceFilter.value.length > 0 ||
       degreeFilter.value.length > 0 ||
@@ -152,8 +164,7 @@ export function useJobFilters() {
 
   function clearFilters() {
     keyword.value = "";
-    salaryMin.value = null;
-    salaryMax.value = null;
+    salaryFilter.value = [];
     cityFilter.value = [];
     experienceFilter.value = [];
     degreeFilter.value = [];
@@ -166,8 +177,7 @@ export function useJobFilters() {
   return {
     // 状态
     keyword,
-    salaryMin,
-    salaryMax,
+    salaryFilter,
     cityFilter,
     experienceFilter,
     degreeFilter,

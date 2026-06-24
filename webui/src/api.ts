@@ -20,6 +20,11 @@ export interface StartParams {
   salary_min: number | null;
   salary_max: number | null;
   tag_sync: boolean;
+  onboarding_completed?: boolean;
+  job_type: string;
+  degrees: string[];
+  experience: string[];
+  salary_fuzzy: boolean;
 }
 
 export interface City {

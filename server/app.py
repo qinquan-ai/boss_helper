@@ -44,6 +44,10 @@ class StartParams(BaseModel):
     tag_sync: bool = False
     safe_mode: bool = True
     fast: bool = False
+    job_type: str = ""
+    degrees: list[str] = []
+    experience: list[str] = []
+    salary_fuzzy: bool = False
 
 
 class AckBody(BaseModel):

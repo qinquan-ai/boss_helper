@@ -5,8 +5,33 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 
+def _dt(fn: str, msg: str, data: dict = None, scope="config"):
+    """写入 debug_tracer 追踪日志。"""
+    try:
+        from server.debug_tracer import debug_tracer
+        debug_tracer.internal(f"config.py:{fn}", msg, data or {}, scope=scope)
+    except Exception:
+        pass
+
 def _find_chrome():
     """自动检测 Chrome 路径"""
+    # Windows 平台下优先尝试从注册表读取安装路径，支持自定义盘符
+    if sys.platform == "win32":
+        try:
+            import winreg
+            for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+                try:
+                    with winreg.OpenKey(hive, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe") as key:
+                        path, _ = winreg.QueryValueEx(key, "")
+                        if path and os.path.isfile(path):
+                            _dt("_find_chrome", "从 Windows 注册表成功检测到 Chrome 路径", {"path": path})
+                            return path
+                except WindowsError:
+                    continue
+        except Exception as e:
+            _dt("_find_chrome", "注册表检测发生异常", {"error": str(e)}, scope="error")
+
+    _dt("_find_chrome", "注册表未检测到 Chrome，开始尝试默认路径检测")
     candidates = [
         os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
         os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
@@ -16,11 +41,32 @@ def _find_chrome():
     ]
     for path in candidates:
         if os.path.isfile(path):
+            _dt("_find_chrome", "从候选路径检测到 Chrome", {"path": path})
             return path
-    return shutil.which("chrome") or shutil.which("google-chrome") or ""
+            
+    res = shutil.which("chrome") or shutil.which("google-chrome") or ""
+    _dt("_find_chrome", "最终检测到的 Chrome 路径", {"path": res})
+    return res
 
 def _find_edge():
     """自动检测 Edge 路径"""
+    # Windows 平台下优先尝试从注册表读取安装路径，支持自定义盘符
+    if sys.platform == "win32":
+        try:
+            import winreg
+            for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+                try:
+                    with winreg.OpenKey(hive, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe") as key:
+                        path, _ = winreg.QueryValueEx(key, "")
+                        if path and os.path.isfile(path):
+                            _dt("_find_edge", "从 Windows 注册表成功检测到 Edge 路径", {"path": path})
+                            return path
+                except WindowsError:
+                    continue
+        except Exception as e:
+            _dt("_find_edge", "注册表检测发生异常", {"error": str(e)}, scope="error")
+
+    _dt("_find_edge", "注册表未检测到 Edge，开始尝试默认路径检测")
     candidates = [
         os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
         os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
@@ -28,8 +74,12 @@ def _find_edge():
     ]
     for path in candidates:
         if os.path.isfile(path):
+            _dt("_find_edge", "从候选路径检测到 Edge", {"path": path})
             return path
-    return shutil.which("msedge") or ""
+            
+    res = shutil.which("msedge") or ""
+    _dt("_find_edge", "最终检测到的 Edge 路径", {"path": res})
+    return res
 
 # 动态判断运行环境是否为打包后的 exe
 if getattr(sys, "frozen", False):
@@ -79,8 +129,15 @@ def load_config(browser_type="chrome"):
     except Exception:
         pass
 
+    browser_path = browser_cfg.get("path", "") or default_path
+    _dt("load_config", "已加载配置", {
+        "browser_type": browser_type,
+        "config_path_val": browser_cfg.get("path", ""),
+        "resolved_path": browser_path
+    })
+
     return {
-        "browser_path": browser_cfg.get("path", "") or default_path,
+        "browser_path": browser_path,
         "profile_dir": browser_cfg.get("profile_dir", "") or os.path.join(PROJECT_DIR, "profiles", profile_name),
         "output_dir": output_dir,
         "port_file": os.path.join(PROJECT_DIR, f".cdp_port_{browser_type}"),
@@ -90,20 +147,30 @@ def load_config(browser_type="chrome"):
 
 def save_config(browser_type="chrome", browser_path=None, output_dir=None):
     """把浏览器路径 / 输出目录写回 config.yaml（仅更新传入的非空项）。"""
+    _dt("save_config", "收到保存配置请求", {
+        "browser_type": browser_type,
+        "browser_path": browser_path,
+        "output_dir": output_dir
+    })
     try:
         import yaml
-    except Exception:
+    except Exception as e:
+        _dt("save_config", "导入 yaml 失败", {"error": str(e)}, scope="error")
         return False
     cfg = _read_yaml()
-    if browser_path:
+    if browser_path is not None:
         cfg.setdefault(browser_type, {})["path"] = browser_path
+        _dt("save_config", f"已更新 {browser_type} 路径配置", {"path": browser_path})
     if output_dir:
         cfg.setdefault("output", {})["dir"] = output_dir
+        _dt("save_config", "已更新输出目录配置", {"dir": output_dir})
     try:
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False)
+        _dt("save_config", "成功写入 config.yaml")
         return True
-    except Exception:
+    except Exception as e:
+        _dt("save_config", "写入 config.yaml 失败", {"error": str(e)}, scope="error")
         return False
 
 
@@ -127,6 +194,11 @@ def load_start_params() -> dict:
         "salary_min": None,
         "salary_max": None,
         "tag_sync": True,
+        "onboarding_completed": False,
+        "job_type": "",
+        "degrees": [],
+        "experience": [],
+        "salary_fuzzy": False,
     }
     result = defaults.copy()
     for k, v in saved.items():
@@ -146,7 +218,8 @@ def save_start_params(params: dict) -> bool:
     allowed = {
         "count", "browser_type", "safe_mode", "fast", "new_chrome",
         "tag", "keyword_search", "query", "city_code", "city_name",
-        "salary_min", "salary_max", "tag_sync",
+        "salary_min", "salary_max", "tag_sync", "onboarding_completed",
+        "job_type", "degrees", "experience", "salary_fuzzy",
     }
     filtered = {k: v for k, v in params.items() if k in allowed}
     cfg["start_params"] = filtered

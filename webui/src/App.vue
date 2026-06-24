@@ -73,7 +73,7 @@ onMounted(async () => {
   leftPanelWidth.value = getDefaultWidthPx();
   
   const completed = localStorage.getItem("boss-helper:onboarding-completed");
-  if (completed !== "true") {
+  if (completed !== "true" && !engine.params.onboarding_completed) {
     showTour.value = true;
   }
 });
