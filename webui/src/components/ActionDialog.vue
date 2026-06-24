@@ -18,12 +18,14 @@ const meta = computed(() => {
       captcha: { icon: "🛡️", title: "需要完成验证码", accent: "text-amber-400" },
       login: { icon: "🔑", title: "登录可能已失效", accent: "text-rose-400" },
       page_check: { icon: "🧭", title: "请确认页面状态", accent: "" },
+      page_confirm: { icon: "🧭", title: "请确认页面状态", accent: "" },
       confirm: { icon: "❓", title: "需要确认", accent: "" },
     } as Record<string, { icon: string; title: string; accent: string }>
   )[kind];
 });
 
 const isPageCheck = computed(() => engine.pendingAction?.kind === "page_check");
+const isPageConfirm = computed(() => engine.pendingAction?.kind === "page_confirm");
 </script>
 
 <template>
@@ -46,7 +48,7 @@ const isPageCheck = computed(() => engine.pendingAction?.kind === "page_check");
         <GlassButton v-if="isPageCheck" variant="ghost" size="sm" @click="engine.ack('manual_scroll')">
           已手动滚动/翻页
         </GlassButton>
-        <GlassButton v-if="isPageCheck" variant="ghost" size="sm" @click="engine.ack('wait')">
+        <GlassButton v-if="isPageCheck || isPageConfirm" variant="ghost" size="sm" @click="engine.ack('wait')">
           我要先手动操作
         </GlassButton>
         <GlassButton variant="solid" size="sm" @click="engine.ack('')">

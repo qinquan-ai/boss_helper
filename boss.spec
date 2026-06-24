@@ -30,11 +30,16 @@ DESCRIPTION = "BOSS 直聘岗位信息整理与助手工具"
 # Windows 版本资源（让右键属性→详细信息能看到版本/作者/公司）
 # ============================================================================
 try:
-    from PyInstaller.utils.win32.version_info import (
-        VSVersionInfo, FixedFileInfo, StringFileInfo, StringTable, StringStruct,
-    )
+    try:
+        from PyInstaller.utils.win32.versioninfo import (
+            VSVersionInfo, FixedFileInfo, StringFileInfo, StringTable, StringStruct,
+        )
+    except ImportError:
+        from PyInstaller.utils.win32.version_info import (
+            VSVersionInfo, FixedFileInfo, StringFileInfo, StringTable, StringStruct,
+        )
     VERSION_RESOURCE = VSVersionInfo(
-        FixedFileInfo(
+        ffi=FixedFileInfo(
             filevers=(0, 1, 0, 0),     # 文件版本 0.1.0.0
             prodvers=(0, 1, 0, 0),     # 产品版本 0.1.0.0
             mask=0x3F,                 # 标准权限位
@@ -44,33 +49,35 @@ try:
             subtype=0x0,
             date=(0, 0),
         ),
-        StringFileInfo([
-            StringTable(
-                "080404b0",  # 简体中文 + Unicode
-                [
-                    StringStruct("CompanyName", COMPANY),
-                    StringStruct("FileDescription", DESCRIPTION),
-                    StringStruct("FileVersion", VERSION),
-                    StringStruct("InternalName", APP_EXE_NAME),
-                    StringStruct("LegalCopyright", COPYRIGHT),
-                    StringStruct("OriginalFilename", APP_EXE_NAME + ".exe"),
-                    StringStruct("ProductName", APP_NAME),
-                    StringStruct("ProductVersion", VERSION),
-                ],
-            ),
-        ]),
-        StringFileInfo([  # 备用：英文
-            StringTable(
-                "040904e4",
-                [
-                    StringStruct("CompanyName", COMPANY),
-                    StringStruct("FileDescription", "BOSS Helper Desktop Tool"),
-                    StringStruct("FileVersion", VERSION),
-                    StringStruct("ProductName", APP_NAME),
-                    StringStruct("ProductVersion", VERSION),
-                ],
-            ),
-        ]),
+        kids=[
+            StringFileInfo([
+                StringTable(
+                    "080404b0",  # 简体中文 + Unicode
+                    [
+                        StringStruct("CompanyName", COMPANY),
+                        StringStruct("FileDescription", DESCRIPTION),
+                        StringStruct("FileVersion", VERSION),
+                        StringStruct("InternalName", APP_EXE_NAME),
+                        StringStruct("LegalCopyright", COPYRIGHT),
+                        StringStruct("OriginalFilename", APP_EXE_NAME + ".exe"),
+                        StringStruct("ProductName", APP_NAME),
+                        StringStruct("ProductVersion", VERSION),
+                    ],
+                ),
+            ]),
+            StringFileInfo([  # 备用：英文
+                StringTable(
+                    "040904e4",
+                    [
+                        StringStruct("CompanyName", COMPANY),
+                        StringStruct("FileDescription", "BOSS Helper Desktop Tool"),
+                        StringStruct("FileVersion", VERSION),
+                        StringStruct("ProductName", APP_NAME),
+                        StringStruct("ProductVersion", VERSION),
+                    ],
+                ),
+            ]),
+        ],
     )
 except Exception as _e:
     print(f"[WARN] 无法注入 Windows 版本资源（{_e}），右键属性将看不到版本号")

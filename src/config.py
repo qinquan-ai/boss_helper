@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
@@ -30,14 +31,20 @@ def _find_edge():
             return path
     return shutil.which("msedge") or ""
 
-CONFIG_PATH = os.path.join(PROJECT_DIR, "config.yaml")
+# 动态判断运行环境是否为打包后的 exe
+if getattr(sys, "frozen", False):
+    EXE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+    CONFIG_PATH = os.path.join(EXE_DIR, "config.yaml")
+else:
+    CONFIG_PATH = os.path.join(PROJECT_DIR, "config.yaml")
 
 
 def _default_output_dir():
-    """开发模式默认项目内 output/；生产模式默认用户文档目录，便于用户长期保存。"""
-    if os.environ.get("BOSS_GUI_DEV") == "1":
-        return os.path.join(PROJECT_DIR, "output")
-    return os.path.join(os.path.expanduser("~"), "Documents", "BOSS助手输出")
+    """开发模式及源码模式默认项目内 output/；打包模式默认可执行文件同级目录的 output/。"""
+    if getattr(sys, "frozen", False):
+        EXE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+        return os.path.join(EXE_DIR, "output")
+    return os.path.join(PROJECT_DIR, "output")
 
 
 def _read_yaml():

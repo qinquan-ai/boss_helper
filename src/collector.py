@@ -306,7 +306,7 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
             ctrl.log(f"\n   [+] 发现 BOSS 页面: {boss_page['url'][:60]}")
             user_input = ctrl.wait_user(
                 "   直接分析该页面? [回车=是 / 输入 wait 手动操作后再分析]: ",
-                kind="page_check",
+                kind="page_confirm",
             ).strip()
             if user_input.lower() == "wait":
                 boss_page = None
@@ -319,7 +319,7 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
             ctrl.log("    3. 尽量往下滚动，加载更多岗位")
             ctrl.log("    4. 回到终端按回车")
             ctrl.log("=" * 60)
-            ctrl.wait_user("\n[等待中...按回车开始分析]: ", kind="page_check")
+            ctrl.wait_user("\n[等待中...按回车开始分析]: ", kind="confirm")
 
             boss_page = browser.find_boss_page()
             if not boss_page:
@@ -553,7 +553,7 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
                 ctrl.log("   [!] 已登录但搜索结果尚未加载出来")
                 ctrl.wait_user(
                     "请在【浏览器窗口】中确认页面后点「我已完成，继续」 ...",
-                    kind="page_check",
+                    kind="page_confirm",
                 )
                 _dt("L1", "run_collection", "reconnect_after_timeout_wait")
                 if not _reconnect_boss(browser, ctrl):
@@ -614,7 +614,7 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
                 ctrl.log(f"\n   [!] 仍无新数据。还差 {count - success_count} 条。")
                 result = ctrl.wait_user(
                     "   [>] 请在浏览器中确认页面状态后点「继续」 ...",
-                    kind="page_check",
+                    kind="page_check" if keyword_mode else "page_confirm",
                 )
                 # [H4] 记录空列表分支
                 _dt("H4", "run_collection", "empty_jobs_branch", {"keyword_mode": keyword_mode, "result": result})
