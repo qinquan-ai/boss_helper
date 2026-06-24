@@ -40,7 +40,7 @@ BOSS-Helper 是一个轻量级工具，支持 **桌面可视化窗口 (pywebview
 
 ```powershell
 # 1. 克隆代码仓库
-git clone https://github.com/yourusername/boss-helper.git
+git clone https://github.com/qinquan-ai/boss_helper.git
 cd boss-helper
 
 # 2. 安装基础依赖
