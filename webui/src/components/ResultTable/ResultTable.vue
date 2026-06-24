@@ -46,7 +46,7 @@ function onCompanyLabelFilter(v: string[]) { f.companyLabelFilter.value = v; }
 </script>
 
 <template>
-  <div class="result-table-root flex flex-col h-full overflow-hidden">
+  <div id="result-table-panel" class="result-table-root flex flex-col h-full overflow-hidden">
     <FilterBar
       :keyword="f.keyword.value"
       @update:keyword="onKeyword"

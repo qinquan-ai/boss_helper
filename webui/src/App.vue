@@ -130,7 +130,7 @@ onMounted(async () => {
         <div
           v-if="!engine.isFullscreen"
           :style="{ flex: `0 0 ${configCollapsed ? '4%' : leftPanelWidth + 'px'}` }"
-          class="flex flex-col overflow-hidden"
+          class="flex flex-col overflow-hidden pl-4 py-4"
         >
           <ConfigPanel v-show="!configCollapsed" class="h-full" @collapse="onCollapse" />
           <CollapsedConfigPanel v-show="configCollapsed" class="h-full" @expand="onExpand" />
@@ -163,6 +163,6 @@ onMounted(async () => {
     </main>
 
     <ActionDialog />
-    <OnboardingTour v-model="showTour" />
+    <OnboardingTour v-model="showTour" @update:tab="tab = $event" />
   </div>
 </template>

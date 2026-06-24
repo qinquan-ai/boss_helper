@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, watch, nextTick } from "vue";
+import { GlassSpotlight2 } from "@/ui/components/highlight";
+import { GlassButton } from "@/ui/components/button";
+import { GlassCard } from "@/ui/components/card";
+import { GlassTag } from "@/ui/components/tag";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -7,28 +11,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "update:modelValue", v: boolean): void;
+  (e: "update:tab", v: "logs" | "results"): void;
 }>();
 
 const currentStep = ref(0);
-const highlightStyle = ref({
-  top: "0px",
-  left: "0px",
-  width: "0px",
-  height: "0px",
-  opacity: 0,
-});
-const bubbleStyle = ref({
-  top: "0px",
-  left: "0px",
-  transform: "none",
-  opacity: 0,
-});
+
+type Placement = "right" | "left" | "top" | "bottom";
 
 interface TourStep {
   title: string;
   desc: string;
   target: string | null;
-  position: "bottom" | "top" | "left" | "right" | "center";
+  position: Placement | "center";
 }
 
 const steps: TourStep[] = [
@@ -46,7 +40,7 @@ const steps: TourStep[] = [
   },
   {
     title: "🔄 自动与手动模式切换",
-    desc: "【开启关键词】输入关键词和城市后，助手将全自动跳转检索；\n\n【关闭关键词】进入完全手动路由，你可以自由在浏览器里滚动、点下一页，助手机智地在后台静默提取，同样支持防漏重和「无缝续接」。",
+    desc: "【开启关键词】输入关键词和城市后，助手将全自动跳转检索；\n\n【关闭关键词】进入完全手动模式。你需要在 boss 页面自行搜索，确认页面是你想采集的数据后，再回到 APP 点击「开始提取」，助手才会开始阅读当前页面。同样支持防漏重和「无缝续接」。",
     target: "#keyword-search-card",
     position: "right",
   },
@@ -65,130 +59,178 @@ const steps: TourStep[] = [
   {
     title: "📂 结果查看、筛选与导出",
     desc: "数据整理完毕后，切换到「岗位列表」Tab，你可以看到所有整理好的记录，通过我们优化后的极简「筛选」按钮可以进行多重秒级本地过滤，并一键导出为 Excel/Markdown。",
-    target: "#tab-bar",
-    position: "bottom",
+    target: "#result-table-panel",
+    position: "top",
   },
 ];
 
-const updatePosition = () => {
-  if (!props.modelValue) return;
+// ── GlassSpotlight 的气泡 ref ─────────────────────────────
+const bubbleEl = ref<HTMLElement | null>(null);
+const spotlightRef = ref<InstanceType<typeof GlassSpotlight2> | null>(null);
 
+// ── 当前目标 DOM 元素 ───────────────────────────────────────
+const currentTargetEl = ref<HTMLElement | null>(null);
+const transitionDuration = ref(150);
+
+// ── 气泡位置计算 ────────────────────────────────────────────
+const bubbleStyle = ref<Record<string, string | number>>({});
+
+const measureBubble = () => {
+  if (!bubbleEl.value) return { w: 350, h: 200 };
+  const r = bubbleEl.value.getBoundingClientRect();
+  return { w: r.width || 350, h: r.height || 200 };
+};
+
+const scrollIntoViewIfNeeded = (el: HTMLElement) => {
+  const rect = el.getBoundingClientRect();
+  const viewportH = window.innerHeight;
+  const viewportW = window.innerWidth;
+  const margin = 80;
+  if (
+    rect.top < margin ||
+    rect.bottom > viewportH - margin ||
+    rect.left < 0 ||
+    rect.right > viewportW
+  ) {
+    el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+  }
+};
+
+const updateBubblePosition = () => {
+  if (!props.modelValue) return;
   const step = steps[currentStep.value];
   if (!step) return;
 
+  // 居中步骤（欢迎页）
   if (!step.target) {
-    // 居中显示
-    highlightStyle.value = {
-      top: "0px",
-      left: "0px",
-      width: "0px",
-      height: "0px",
-      opacity: 0,
-    };
     bubbleStyle.value = {
       top: "50%",
       left: "50%",
       transform: "translate(-50%, -50%)",
-      opacity: 1,
     };
     return;
   }
 
-  const el = document.querySelector(step.target);
-  if (!el) {
-    // 找不到目标，退化为居中显示
-    highlightStyle.value = {
-      top: "0px",
-      left: "0px",
-      width: "0px",
-      height: "0px",
-      opacity: 0,
-    };
-    bubbleStyle.value = {
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%, -50%)",
-      opacity: 1,
-    };
-    return;
-  }
+  const el = document.querySelector(step.target) as HTMLElement | null;
+  if (!el) return;
 
-  // 获取目标元素的位置尺寸
+  currentTargetEl.value = el;
+  scrollIntoViewIfNeeded(el);
+
   const rect = el.getBoundingClientRect();
-  const offset = 8; // 预留一点高亮的边距
+  const offset = 8;
+  const viewportW = window.innerWidth;
+  const viewportH = window.innerHeight;
+  const padding = 16;
+  const gap = 16;
+  const { w: bubbleW, h: bubbleH } = measureBubble();
 
-  highlightStyle.value = {
-    top: `${rect.top - offset}px`,
-    left: `${rect.left - offset}px`,
-    width: `${rect.width + offset * 2}px`,
-    height: `${rect.height + offset * 2}px`,
-    opacity: 1,
-  };
+  const spaceRight = viewportW - rect.right - offset - gap - padding;
+  const spaceLeft = rect.left - offset - gap - padding;
+  const spaceBottom = viewportH - rect.bottom - offset - gap - padding;
+  const spaceTop = rect.top - offset - gap - padding;
 
-  // 计算气泡位置
-  const bubbleGap = 16;
+  const preferred = step.position === "center" ? "right" : step.position;
+  const candidates: { placement: Placement; fits: boolean; space: number }[] = (
+    ["right", "left", "bottom", "top"] as Placement[]
+  ).map((p) => {
+    const needW = p === "left" || p === "right";
+    const need = needW ? bubbleW : bubbleH;
+    const space =
+      p === "right"
+        ? spaceRight
+        : p === "left"
+        ? spaceLeft
+        : p === "bottom"
+        ? spaceBottom
+        : spaceTop;
+    return { placement: p, fits: space >= need, space };
+  });
+
+  let chosen = candidates.find((c) => c.placement === preferred && c.fits);
+  if (!chosen) {
+    const fits = candidates.filter((c) => c.fits);
+    chosen = fits.length
+      ? fits.reduce((a, b) => (a.space > b.space ? a : b))
+      : candidates.reduce((a, b) => (a.space > b.space ? a : b));
+  }
+
+  const placement = chosen.placement;
   let top = 0;
   let left = 0;
   let transform = "none";
 
-  if (step.position === "right") {
+  if (placement === "right") {
     top = rect.top + rect.height / 2;
-    left = rect.right + offset + bubbleGap;
+    left = rect.right + offset + gap;
     transform = "translateY(-50%)";
-  } else if (step.position === "left") {
+  } else if (placement === "left") {
     top = rect.top + rect.height / 2;
-    left = rect.left - offset - bubbleGap;
+    left = rect.left - offset - gap;
     transform = "translate(-100%, -50%)";
-  } else if (step.position === "top") {
-    top = rect.top - offset - bubbleGap;
+  } else if (placement === "top") {
+    top = rect.top - offset - gap;
     left = rect.left + rect.width / 2;
     transform = "translate(-50%, -100%)";
   } else {
-    // default bottom
-    top = rect.bottom + offset + bubbleGap;
+    top = rect.bottom + offset + gap;
     left = rect.left + rect.width / 2;
     transform = "translate(-50%, 0)";
   }
 
-  // 防溢出视口边界调整
-  const viewportW = window.innerWidth;
-  const viewportH = window.innerHeight;
-  const bubbleW = 340; // 气泡预估宽度
-  const bubbleH = 200; // 气泡预估高度
-
-  let leftPx = left;
   let topPx = top;
-
-  // 左右越界调整
-  if (step.position === "bottom" || step.position === "top") {
-    const minLeft = bubbleW / 2 + 16;
-    const maxLeft = viewportW - bubbleW / 2 - 16;
+  let leftPx = left;
+  if (placement === "left" || placement === "right") {
+    const minTop = padding;
+    const maxTop = viewportH - bubbleH - padding;
+    topPx = Math.max(minTop, Math.min(maxTop, topPx));
+  } else {
+    const minLeft = bubbleW / 2 + padding;
+    const maxLeft = viewportW - bubbleW / 2 - padding;
     leftPx = Math.max(minLeft, Math.min(maxLeft, leftPx));
-  } else if (step.position === "right") {
-    if (leftPx + bubbleW > viewportW - 16) {
-      // 空间不够，塞到上方或下方
-      topPx = rect.bottom + offset + bubbleGap;
-      leftPx = rect.left + rect.width / 2;
-      transform = "translate(-50%, 0)";
-    }
-  }
-
-  // 上下越界调整
-  if (topPx + bubbleH > viewportH - 16) {
-    topPx = viewportH - bubbleH - 16;
-  }
-  if (topPx < 16) {
-    topPx = 16;
   }
 
   bubbleStyle.value = {
     top: `${topPx}px`,
     left: `${leftPx}px`,
     transform,
-    opacity: 1,
   };
 };
 
+// ── 步骤切换时触发气泡位置更新 ─────────────────────────────
+watch(currentStep, (newStep, oldStep) => {
+  if (newStep === 4 || oldStep === 4) {
+    transitionDuration.value = 0;
+  } else {
+    transitionDuration.value = 150;
+  }
+  nextTick(() => {
+    if (currentStep.value === 5) {
+      emit("update:tab", "results");
+      setTimeout(() => {
+        requestAnimationFrame(() => updateBubblePosition());
+      }, 150);
+    } else {
+      requestAnimationFrame(() => updateBubblePosition());
+    }
+  });
+});
+
+watch(
+  () => props.modelValue,
+  (val) => {
+    if (val) {
+      currentStep.value = 0;
+      nextTick(() => {
+        requestAnimationFrame(() => {
+          updateBubblePosition();
+        });
+      });
+    }
+  }
+);
+
+// ── 按钮逻辑 ────────────────────────────────────────────────
 const handleNext = () => {
   if (currentStep.value < steps.length - 1) {
     currentStep.value++;
@@ -207,66 +249,35 @@ const handleClose = () => {
   emit("update:modelValue", false);
   localStorage.setItem("boss-helper:onboarding-completed", "true");
 };
-
-watch(
-  () => props.modelValue,
-  (val) => {
-    if (val) {
-      currentStep.value = 0;
-      nextTick(() => {
-        setTimeout(updatePosition, 100);
-      });
-    }
-  }
-);
-
-watch(currentStep, () => {
-  nextTick(updatePosition);
-});
-
-onMounted(() => {
-  window.addEventListener("resize", updatePosition);
-});
-
-onUnmounted(() => {
-  window.removeEventListener("resize", updatePosition);
-});
 </script>
 
 <template>
-  <Teleport to="body">
+  <GlassSpotlight2
+    ref="spotlightRef"
+    :model-value="modelValue"
+    :target-el="currentTargetEl"
+    :bubble-position="bubbleStyle"
+    :show-pulse="true"
+    :padding="8"
+    :transition-duration="transitionDuration"
+    glow-size="auto"
+  >
+    <!-- 默认气泡插槽 -->
     <div
-      v-if="modelValue"
-      class="fixed inset-0 z-[9995] transition-opacity duration-300 pointer-events-auto"
+      v-if="modelValue && steps[currentStep]?.target !== null"
+      ref="bubbleEl"
+      class="absolute w-[350px] max-w-[calc(100vw-32px)] z-[9997] flex pointer-events-auto"
+      :class="transitionDuration > 0 ? 'transition-all duration-300 ease-out' : ''"
+      :style="bubbleStyle"
     >
-      <!-- 暗色背景遮罩 -->
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-[2px]"></div>
-
-      <!-- 探照灯聚光高亮区域 -->
-      <div
-        class="absolute border border-brand/50 rounded-xl transition-all duration-300 ease-out shadow-[0_0_24px_rgba(var(--accent-rgb),0.3),_0_0_0_9999px_rgba(0,0,0,0.5)] pointer-events-none z-[9996]"
-        :style="highlightStyle"
-      >
-        <!-- 呼吸光环 -->
-        <div class="absolute inset-0 rounded-xl animate-pulse-ring border-2 border-brand pointer-events-none"></div>
-      </div>
-
-      <!-- 导览详情气泡框 -->
-      <div
-        class="absolute w-[350px] rounded-2xl glass-surface p-5 z-[9997] transition-all duration-300 ease-out flex flex-col gap-4 text-fg"
-        :style="bubbleStyle"
-      >
+      <GlassCard padded class="flex flex-col gap-4 text-fg w-full !p-5">
         <div class="flex items-center justify-between">
-          <span class="text-[11px] font-semibold tracking-wider text-brand bg-brand/10 px-2 py-0.5 rounded-full">
+          <GlassTag variant="brand">
             步骤 {{ currentStep + 1 }} / {{ steps.length }}
-          </span>
-          <button
-            type="button"
-            class="text-fg-subtle hover:text-fg text-xs transition-colors"
-            @click="handleClose"
-          >
+          </GlassTag>
+          <GlassButton variant="ghost" size="sm" @click="handleClose">
             跳过指引
-          </button>
+          </GlassButton>
         </div>
 
         <div class="flex flex-col gap-2">
@@ -280,51 +291,52 @@ onUnmounted(() => {
 
         <div class="flex items-center justify-between mt-2 pt-3 border-t border-bg-border/30">
           <div class="flex gap-1.5">
-            <button
+            <GlassButton
               v-if="currentStep > 0"
-              type="button"
-              class="btn-ghost !py-1 !px-2.5 !rounded-lg text-xs"
+              variant="ghost"
+              size="sm"
               @click="handlePrev"
             >
               上一步
-            </button>
+            </GlassButton>
           </div>
-          <button
-            type="button"
-            class="btn-primary !py-1 !px-3.5 !rounded-lg text-xs font-semibold"
-            @click="handleNext"
-          >
+          <GlassButton variant="solid" size="sm" @click="handleNext">
             {{ currentStep === steps.length - 1 ? "完成开启" : "下一步" }}
-          </button>
+          </GlassButton>
         </div>
-      </div>
+      </GlassCard>
     </div>
-  </Teleport>
+
+    <!-- 欢迎页气泡（居中，无 target） -->
+    <div
+      v-else-if="modelValue"
+      class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] max-w-[calc(100vw-32px)] z-[9997] flex pointer-events-auto"
+    >
+      <GlassCard padded class="flex flex-col gap-5 text-fg w-full !p-6">
+        <div class="flex items-center justify-between">
+          <GlassTag variant="brand">
+            步骤 {{ currentStep + 1 }} / {{ steps.length }}
+          </GlassTag>
+          <GlassButton variant="ghost" size="sm" @click="handleClose">
+            跳过指引
+          </GlassButton>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <h3 class="text-base font-bold text-fg leading-snug">
+            {{ steps[currentStep].title }}
+          </h3>
+          <p class="text-xs text-fg-muted whitespace-pre-wrap leading-relaxed">
+            {{ steps[currentStep].desc }}
+          </p>
+        </div>
+
+        <div class="flex justify-end mt-2 pt-3 border-t border-bg-border/30">
+          <GlassButton variant="solid" size="sm" @click="handleNext">
+            {{ currentStep === steps.length - 1 ? "完成开启" : "下一步" }}
+          </GlassButton>
+        </div>
+      </GlassCard>
+    </div>
+  </GlassSpotlight2>
 </template>
-
-<style scoped>
-@keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 17, 24, 39), 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(var(--accent-rgb, 17, 24, 39), 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 17, 24, 39), 0);
-  }
-}
-
-.animate-pulse-ring {
-  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* 玻璃气泡框阴影样式微调，突出浮空感 */
-.glass-surface {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.4), inset 0 1px 0 var(--glass-highlight);
-}
-</style>

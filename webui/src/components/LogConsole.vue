@@ -76,7 +76,7 @@ const copyLabel = {
 </script>
 
 <template>
-  <div class="card flex flex-col min-h-[480px] max-h-[calc(100dvh-var(--header-h)-16rem)] overflow-hidden">
+  <div id="log-console-panel" class="card flex flex-col min-h-[480px] max-h-[calc(100dvh-var(--header-h)-16rem)] overflow-hidden">
     <div class="flex items-center justify-between px-4 py-2.5 border-b border-bg-border">
       <span class="text-sm font-semibold text-fg">实时日志</span>
       <div class="flex items-center gap-3">
