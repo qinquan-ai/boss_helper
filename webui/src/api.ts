@@ -126,4 +126,6 @@ export const api = {
       "/api/start-params",
       { method: "POST", body: JSON.stringify(params) }
     ),
+  resetStartParams: () =>
+    jsonFetch<{ ok: boolean }>("/api/start-params/reset", { method: "POST" }),
 };

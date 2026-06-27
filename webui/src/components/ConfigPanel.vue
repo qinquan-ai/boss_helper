@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useEngine } from "@/stores/engine";
-import { GlassSelect, GlassCheckbox, GlassToggle, GlassMultiSelect } from "@/ui";
+import { GlassSelect, GlassCheckbox, GlassToggle, GlassMultiSelect, GlassDialog, GlassButton } from "@/ui";
 
 defineEmits<{
   (e: "collapse"): void;
@@ -173,13 +173,35 @@ watch(salaryRangeValue, (v) => {
     engine.params.salary_fuzzy = false;
   }
 });
+
+const showResetConfirm = ref(false);
+
+function resetConfig() {
+  showResetConfirm.value = true;
+}
+
+async function confirmReset() {
+  showResetConfirm.value = false;
+  await engine.resetParams();
+}
 </script>
 
 <template>
   <aside id="config-panel" class="card p-5 w-full h-full flex flex-col gap-5 overflow-hidden lg:overflow-y-auto">
     <div class="flex items-start justify-between gap-2">
       <div>
-        <h2 class="text-sm font-semibold text-fg mb-1">运行配置</h2>
+        <div class="flex items-center gap-2 mb-0.5">
+          <h2 class="text-sm font-semibold text-fg">运行配置</h2>
+          <button
+            type="button"
+            class="text-[11px] text-fg-subtle hover:text-fg transition-colors font-normal cursor-pointer select-none"
+            title="恢复默认配置"
+            :disabled="engine.running"
+            @click="resetConfig"
+          >
+            恢复默认
+          </button>
+        </div>
         <p class="text-xs text-fg-subtle">设置后点击右侧「启动助手」</p>
       </div>
       <!-- 折叠手柄：箭头指向左侧（折叠后方向是反向） -->
@@ -444,6 +466,29 @@ watch(salaryRangeValue, (v) => {
       </div>
     </div>
   </aside>
+
+  <!-- 确认重置弹窗 -->
+  <GlassDialog
+    v-model="showResetConfirm"
+    icon="⚠️"
+    title="还原默认设置"
+    width="25rem"
+  >
+    <div class="text-sm text-fg-muted whitespace-pre-wrap leading-relaxed">
+      确定要将所有运行配置还原为默认设置吗？此操作将清空当前的岗位搜索、城市等配置。
+    </div>
+
+    <template #footer>
+      <div class="flex gap-2">
+        <GlassButton variant="ghost" size="sm" @click="showResetConfirm = false">
+          取消
+        </GlassButton>
+        <GlassButton variant="solid" size="sm" @click="confirmReset">
+          确定重置
+        </GlassButton>
+      </div>
+    </template>
+  </GlassDialog>
 </template>
 
 <style scoped>

@@ -278,6 +278,32 @@ class _PickApi:
             pass
         return ""
 
+    def save_file(self, filename: str, content: str) -> str:
+        try:
+            from server.debug_tracer import debug_tracer
+            debug_tracer.entry("PickApi:save_file", f"请求保存文件: {filename}", {"filename": filename})
+            res = self._window.create_file_dialog(
+                self._webview.SAVE_DIALOG,
+                save_filename=filename,
+                file_types=("CSV Files (*.csv)", "All Files (*.*)")
+            )
+            if res:
+                save_path = res[0]
+                with open(save_path, "w", encoding="utf-8-sig") as f:
+                    f.write(content)
+                debug_tracer.entry("PickApi:save_file_success", f"文件成功保存至: {save_path}", {"path": save_path})
+                return save_path
+            else:
+                debug_tracer.entry("PickApi:save_file_cancelled", f"用户取消了保存文件: {filename}")
+        except Exception as e:
+            try:
+                from server.debug_tracer import debug_tracer
+                debug_tracer.entry("PickApi:save_file_error", f"保存文件失败: {str(e)}", {"error": str(e)}, scope="error")
+            except Exception:
+                pass
+            print(f"[PickApi] save_file error: {e}")
+        return ""
+
     # ── 通知 ───────────────────────────────────────────────────
     def flash_taskbar(self, count=6):
         """任务栏图标闪烁（Windows 原生，无需额外依赖）。"""
