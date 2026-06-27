@@ -249,6 +249,19 @@ export const useEngine = defineStore("engine", {
       }
     },
 
+    async resetParams() {
+      try {
+        const r = await api.resetStartParams();
+        if (r.ok) {
+          this.initialized = false;
+          await this.loadConfig();
+          this.pushLog("info", "已成功重置运行配置为默认值");
+        }
+      } catch (e) {
+        this.pushLog("error", `重置配置失败: ${e}`);
+      }
+    },
+
     async stop() {
       if (this.stopping) return;
       this.stopping = true;

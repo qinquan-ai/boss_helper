@@ -105,6 +105,13 @@ def api_save_start_params(body: dict):
     return {"ok": ok}
 
 
+@app.post("/api/start-params/reset")
+def api_reset_start_params():
+    """将运行参数重置为系统默认值。"""
+    ok = save_start_params({})
+    return {"ok": ok}
+
+
 @app.get("/api/cities")
 def api_get_cities():
     """返回城市列表（内置常用城市，缓存优先）。"""

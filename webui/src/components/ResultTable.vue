@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch, type Ref } from "vue";
 import { useEngine } from "@/stores/engine";
 import { GlassSelect, GlassTag } from "@/ui";
 import type { Job } from "@/api";
+import { trace } from "@/utils/debugTracer";
 
 // ============================================================================
 // 列定义（声明式）：key 是 Job 字段；render 返回 cell 显示文本/JSX
@@ -278,12 +279,42 @@ function exportCsv() {
     }).join(",")
   );
   const csv = "\uFEFF" + [header, ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = (engine.currentFile || "jobs").replace(/\.json$/, "") + ".csv";
-  a.click();
-  URL.revokeObjectURL(a.href);
+  const filename = (engine.currentFile || "jobs").replace(/\.json$/, "") + ".csv";
+
+  // 增加极其详细的 debugtracer 追踪
+  trace.action("ResultTable:exportCsv", `导出 CSV: ${filename}`, {
+    filename,
+    rowsCount: rows.length,
+    columns: cols.map((c) => c.title),
+    sourceFile: engine.currentFile || "default",
+    filters: {
+      keyword: keyword.value,
+      salaryMin: salaryMin.value,
+      salaryMax: salaryMax.value,
+      skills: skillFilter.value,
+      welfare: welfareFilter.value,
+      tags: tagFilter.value,
+    }
+  });
+
+  const pywebview = (window as any).pywebview;
+  if (pywebview?.api?.save_file) {
+    pywebview.api.save_file(filename, csv).then((savePath: string) => {
+      if (savePath) {
+        trace.action("ResultTable:exportCsv_success", `文件已通过 App 成功保存`, { filename, savePath });
+      } else {
+        trace.action("ResultTable:exportCsv_cancelled", `用户取消了文件保存或保存失败`, { filename });
+      }
+    });
+  } else {
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    trace.action("ResultTable:exportCsv_success", `文件已通过浏览器触发下载: ${filename}`, { filename });
+  }
 }
 
 // ============================================================================
