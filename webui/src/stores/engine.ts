@@ -183,26 +183,26 @@ export const useEngine = defineStore("engine", {
       this.errorMsg = "";
       this.logs = [];
       this.progress = { done: 0, total: this.params.count, stats: {} };
-      trace.startScope("collect-start");
-      trace.action("engine:start", "用户点击启动", {
+      trace.startScope("start-collection");
+      trace.log({ layer: "FE-ACTION", fn: "engine:start", msg: "用户点击启动", scope: "start-collection", data: {
         query: this.params.query,
         city: this.params.city_name,
         count: this.params.count,
-      });
+      }});
       try {
         const r = await api.start(this.params);
         if (!r.ok) {
           this.errorMsg = r.error || "启动失败";
           this.pushLog("error", this.errorMsg);
-          trace.action("engine:start", "启动失败", { error: this.errorMsg });
-          trace.endScope("collect-start");
+          trace.log({ layer: "FE-ACTION", fn: "engine:start", msg: "启动失败", data: { error: this.errorMsg }, scope: "start-collection" });
+          trace.endScope("start-collection");
           return;
         }
       } catch (e) {
         this.errorMsg = `启动失败: ${e}`;
         this.pushLog("error", this.errorMsg);
-        trace.action("engine:start", "启动异常", { error: String(e) });
-        trace.endScope("collect-start");
+        trace.log({ layer: "FE-ACTION", fn: "engine:start", msg: "启动异常", data: { error: String(e) }, scope: "start-collection" });
+        trace.endScope("start-collection");
         return;
       }
       this.state = "running";
@@ -266,13 +266,13 @@ export const useEngine = defineStore("engine", {
       if (this.stopping) return;
       this.stopping = true;
       this.pushLog("warn", "已发送停止指令，等待当前条目收尾 ...");
-      trace.startScope("collect-stop");
-      trace.action("engine:stop", "用户点击停止", {});
+      trace.startScope("stop-collection");
+      trace.log({ layer: "FE-ACTION", fn: "engine:stop", msg: "用户点击停止", scope: "stop-collection" });
       try {
         await api.stop();
       } catch (e) {
         this.pushLog("error", `停止失败: ${e}`);
-        trace.action("engine:stop", "停止失败", { error: String(e) });
+        trace.log({ layer: "FE-ACTION", fn: "engine:stop", msg: "停止失败", data: { error: String(e) }, scope: "stop-collection" });
       }
       const started = Date.now();
       const poll = async () => {
@@ -299,13 +299,13 @@ export const useEngine = defineStore("engine", {
       if (this.pausing || this.state !== "running") return;
       this.pausing = true;
       this.pushLog("warn", "已发送暂停指令 ...");
-      trace.startScope("collect-pause");
-      trace.action("engine:pause", "用户点击暂停", {});
+      trace.startScope("pause-collection");
+      trace.log({ layer: "FE-ACTION", fn: "engine:pause", msg: "用户点击暂停", scope: "pause-collection" });
       try {
         await api.pause();
       } catch (e) {
         this.pushLog("error", `暂停失败: ${e}`);
-        trace.action("engine:pause", "暂停失败", { error: String(e) });
+        trace.log({ layer: "FE-ACTION", fn: "engine:pause", msg: "暂停失败", data: { error: String(e) }, scope: "pause-collection" });
         this.pausing = false;
       }
     },
@@ -314,13 +314,13 @@ export const useEngine = defineStore("engine", {
       if (!this.pausing && this.state !== "paused") return;
       this.pausing = false;
       this.pushLog("info", "继续采集 ...");
-      trace.startScope("collect-resume");
-      trace.action("engine:resume", "用户点击继续", {});
+      trace.startScope("resume-collection");
+      trace.log({ layer: "FE-ACTION", fn: "engine:resume", msg: "用户点击继续", scope: "resume-collection" });
       try {
         await api.resume();
       } catch (e) {
         this.pushLog("error", `继续失败: ${e}`);
-        trace.action("engine:resume", "继续失败", { error: String(e) });
+        trace.log({ layer: "FE-ACTION", fn: "engine:resume", msg: "继续失败", data: { error: String(e) }, scope: "resume-collection" });
       }
     },
 
@@ -331,10 +331,10 @@ export const useEngine = defineStore("engine", {
       this.seamlessMode = false;
       if (this.state === "running" || this.state === "waiting" || this.state === "paused") this.state = "stopped";
       this.pendingAction = null;
-      trace.endScope("collect-stop");
-      trace.endScope("collect-start");
-      trace.endScope("collect-pause");
-      trace.endScope("collect-resume");
+      trace.endScope("stop-collection");
+      trace.endScope("start-collection");
+      trace.endScope("pause-collection");
+      trace.endScope("resume-collection");
       this.loadResults();
     },
 
@@ -347,10 +347,10 @@ export const useEngine = defineStore("engine", {
     async loadResults(date?: string) {
       try {
         trace.startScope("load-results");
-        trace.api("engine:loadResults", "加载岗位列表", {
+        trace.log({ layer: "FE-API", fn: "engine:loadResults", msg: "加载岗位列表", scope: "load-results", data: {
           date: date ?? "(latest)",
           output_dir: this.config?.output_dir,
-        });
+        }});
         const r = await api.getResults(date, this.config?.output_dir);
         const jobs: Job[] = (r.jobs || []).map((j: any) => {
           if (j.salary && (j.salaryMin == null || j.salaryMax == null)) {
@@ -365,15 +365,15 @@ export const useEngine = defineStore("engine", {
         this.jobs = jobs;
         this.resultFiles = r.files || [];
         this.currentFile = r.file;
-        trace.api("engine:loadResults", "加载成功", {
+        trace.log({ layer: "FE-API", fn: "engine:loadResults", msg: "加载成功", scope: "load-results", data: {
           jobs_count: jobs.length,
           current_file: r.file,
           files_count: r.files?.length,
-        });
+        }});
         trace.endScope("load-results");
       } catch (e) {
         this.pushLog("error", `加载结果失败: ${e}`);
-        trace.api("engine:loadResults", "加载失败", { error: String(e) });
+        trace.log({ layer: "FE-API", fn: "engine:loadResults", msg: "加载失败", data: { error: String(e) }, scope: "load-results" });
         trace.endScope("load-results");
       }
     },
@@ -385,7 +385,7 @@ export const useEngine = defineStore("engine", {
       ws = new WebSocket(`${proto}://${location.host}/ws`);
       ws.onopen = () => {
         this.wsConnected = true;
-        trace.ws("engine:connectWs", "WebSocket 已连接", {});
+        trace.log({ layer: "FE-WS", fn: "engine:connectWs", msg: "WebSocket 已连接", scope: this.running ? "start-collection" : undefined });
       };
       ws.onclose = () => {
         this.wsConnected = false;
@@ -393,7 +393,7 @@ export const useEngine = defineStore("engine", {
       };
       ws.onmessage = (ev) => {
         const data = JSON.parse(ev.data);
-        trace.ws("engine:handleEvent", `收到 WS 消息: ${data.type}`, data);
+        trace.log({ layer: "FE-WS", fn: "engine:handleEvent", msg: `收到 WS 消息: ${data.type}`, data, scope: this.running ? "start-collection" : undefined });
         this.handleEvent(data);
       };
     },
@@ -403,7 +403,7 @@ export const useEngine = defineStore("engine", {
         case "log":
           this.pushLog(ev.level || "info", ev.msg ?? "");
           if (ev.level === "error") {
-            trace.action("engine:handleEvent", "引擎日志错误", { msg: ev.msg });
+            trace.log({ layer: "FE-ACTION", fn: "engine:handleEvent", msg: "引擎日志错误", data: { msg: ev.msg }, scope: this.running ? "start-collection" : undefined });
           }
           break;
         case "progress":
@@ -415,7 +415,7 @@ export const useEngine = defineStore("engine", {
           break;
         case "status":
           this.state = ev.state as EngineState;
-          trace.action("engine:handleEvent", `状态变更: ${ev.state}`, { detail: ev.detail });
+          trace.log({ layer: "FE-ACTION", fn: "engine:handleEvent", msg: `状态变更: ${ev.state}`, data: { detail: ev.detail }, scope: this.running ? "start-collection" : undefined });
           if (ev.state === "done" || ev.state === "stopped") {
             this.running = false;
             this.stopping = false;
@@ -449,7 +449,7 @@ export const useEngine = defineStore("engine", {
           this.state = "waiting";
           sound.play("alert");
           try { (window as any).pywebview?.api?.flash_taskbar?.(6); } catch { /* 静默 */ }
-          trace.action("engine:handleEvent", "需要用户操作", { reason: ev.reason, kind: ev.kind });
+          trace.log({ layer: "FE-ACTION", fn: "engine:handleEvent", msg: "需要用户操作", data: { reason: ev.reason, kind: ev.kind }, scope: this.running ? "start-collection" : undefined });
           break;
         case "seamless_mode":
           this.seamlessMode = ev.enabled;

@@ -223,10 +223,18 @@ async def ws_endpoint(ws: WebSocket):
 
 @app.post("/__debug_log")
 async def api_debug_log(request: Request):
-    """Vite 中间件端点：接收前端日志并写入 .cursor/debug.log + .RandP/debug.log"""
+    """Vite 中间件端点：接收前端日志并写入标准 TraceLink"""
     try:
         body = await request.json()
-        debug_tracer.internal("app.py:__debug_log", "前端日志", body)
+        layer = body.get("layer", "FE-UI")
+        fn = body.get("fn", "unknown")
+        msg = body.get("msg", "")
+        data = body.get("data", {})
+        scope = body.get("scope")
+        
+        # 真正还原前端日志的层级并转发到标准 Tracer
+        from tracelink import debug_tracer as standard_tracer
+        standard_tracer.custom(layer, fn, msg, data, scope=scope)
     except Exception:
         pass
     return {"ok": True}
@@ -253,7 +261,9 @@ def api_debug_clear():
 @app.get("/__debug_log")
 def api_debug_read():
     """读取日志文件内容（供调试面板使用）"""
-    log_path = debug_tracer._log_path
+    from pathlib import Path
+    project_root = Path(__file__).resolve().parents[1]
+    log_path = project_root / ".tracelink" / "trace.ndjson"
     try:
         if log_path.exists():
             with open(log_path, "r", encoding="utf-8") as f:

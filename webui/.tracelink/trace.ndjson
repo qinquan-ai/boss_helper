@@ -1,0 +1,12 @@
+{"ts":"[14:35:01.958]","layer":"FE-API","fn":"GlassSelect:pick","msg":"选中选项: 上海 (101020100)","data":{},"traceId":"no-trace","spanId":"span-15"}
+{"ts":"[14:36:43.524]","layer":"FE-API","fn":"GlassSelect:pick","msg":"选中选项: 广州 (101280100)","data":{},"traceId":"no-trace","spanId":"span-3"}
+{"ts":"[14:36:55.601]","layer":"FE-API","fn":"GlassSelect:pick","msg":"选中选项: 3K 以下 (0-3)","data":{},"traceId":"no-trace","spanId":"span-4"}
+{"ts":"[14:36:57.356]","layer":"FE-API","fn":"GlassSelect:pick","msg":"选中选项: 不限 (0-0)","data":{},"traceId":"no-trace","spanId":"span-5"}
+{"ts":"[14:36:59.914]","layer":"FE-ACTION","fn":"Tracer:startScope","msg":"开始追踪: load-results","data":{"scope":"load-results","traceId":"load-results-419914-ew1"},"traceId":"load-results-419914-ew1","spanId":"span-6","scope":"load-results"}
+{"ts":"[14:36:59.915]","layer":"FE-API","fn":"engine:loadResults","msg":"加载岗位列表","data":{"date":"(latest)","output_dir":"C:\\Users\\Administrator\\Desktop\\boss_output"},"traceId":"load-results-419914-ew1","spanId":"span-7","scope":"load-results"}
+{"ts":"[14:36:59.935]","layer":"FE-API","fn":"engine:loadResults","msg":"加载成功","data":{"jobs_count":20,"current_file":"jobs_2026-07-05_AI_上海_10-20K.json","files_count":6},"traceId":"load-results-419914-ew1","spanId":"span-8","scope":"load-results"}
+{"ts":"[14:36:59.935]","layer":"FE-ACTION","fn":"Tracer:endScope","msg":"结束追踪: load-results","data":{"scope":"load-results","duration":21},"traceId":"load-results-419914-ew1","spanId":"span-9","scope":"load-results"}
+{"ts":"[14:36:59.936]","layer":"FE-API","fn":"useJobFilters:filtered","msg":"filtered 重算: 20 条 (salaryFilter=)","data":{"salaryFilter":[],"totalJobs":20,"filteredCount":20},"traceId":"no-trace","spanId":"span-10"}
+{"ts":"[14:36:59.937]","layer":"FE-API","fn":"ResultTable:filtered","msg":"filtered 传给 JobTable: 20 条","data":{"count":20,"salaryFilter":[]},"traceId":"no-trace","spanId":"span-11"}
+{"ts":"[14:36:59.942]","layer":"FE-API","fn":"JobTable:jobs","msg":"props.jobs 更新: 20 条","data":{"count":20},"traceId":"load-results-419942-3v5","spanId":"span-12","scope":"load-results"}
+{"ts":"[14:36:59.942]","layer":"FE-API","fn":"JobTable:sortedJobs","msg":"sortedJobs 重算: 20 条 (props.jobs=20)","data":{"count":20,"propsCount":20},"traceId":"load-results-419942-f7i","spanId":"span-13","scope":"load-results"}

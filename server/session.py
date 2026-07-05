@@ -26,31 +26,31 @@ class Session:
 
         def _run():
             try:
-                debug_tracer.entry("session.py:_run", "分析线程开始", {"query": params.get("query")}, scope="collect-start")
+                debug_tracer.entry("session.py:_run", "分析线程开始", {"query": params.get("query")}, scope="start-collection")
                 run_collection(controller=ctrl, **params)
             except Exception as exc:  # noqa: BLE001
                 debug_tracer.entry("session.py:_run", "分析线程异常", {"error": str(exc)}, scope="error")
                 ctrl.log(f"[ERROR] 分析线程异常: {exc}", level="error")
                 ctrl.status("error", str(exc))
             finally:
-                debug_tracer.end_scope("collect-start")
+                debug_tracer.end_scope("start-collection")
 
         self.thread = threading.Thread(target=_run, name="helper_session", daemon=True)
         self.thread.start()
 
     def stop(self):
         if self.controller:
-            debug_tracer.entry("session.py:stop", "停止运行", {}, scope="collect-stop")
+            debug_tracer.entry("session.py:stop", "停止运行", {}, scope="stop-collection")
             self.controller.request_stop()
 
     def pause(self):
         if self.controller:
-            debug_tracer.entry("session.py:pause", "暂停任务", {}, scope="collect-start")
+            debug_tracer.entry("session.py:pause", "暂停任务", {}, scope="pause-collection")
             self.controller.request_pause()
 
     def resume(self):
         if self.controller:
-            debug_tracer.entry("session.py:resume", "继续任务", {}, scope="collect-start")
+            debug_tracer.entry("session.py:resume", "继续任务", {}, scope="resume-collection")
             self.controller.request_resume()
 
     def ack(self, payload: str = ""):
