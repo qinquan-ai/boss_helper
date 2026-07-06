@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "tracelink": "file:../../debug_project/Trace_Link"
+  }
+}

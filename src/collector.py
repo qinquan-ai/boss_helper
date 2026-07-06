@@ -10,6 +10,18 @@ def _dt(scope: str, fn: str, msg: str, data: dict | None = None):
     debug_tracer.internal(f"collector.py:{fn}", msg, data or {}, scope=scope)
 
 
+def _trace_span(layer: str, fn: str, msg: str, scope: str = None):
+    """用于包裹执行函数的 TraceLink 追踪装饰器。"""
+    def decorator(func):
+        from server.debug_tracer import debug_tracer
+        import functools
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            return debug_tracer.span(layer, fn, msg, lambda: func(*args, **kwargs), scope=scope)
+        return wrapper
+    return decorator
+
+
 from src.config import get_config
 from src.core.browser import BrowserManager
 from src.core.extractor import VueExtractor, DetailPanelReader
@@ -211,6 +223,7 @@ def get_salary_code(salary_min, salary_max):
     return None
 
 
+@_trace_span("BE-INTERNAL", "collector.py:_goto_search", "执行搜索结果页导航", scope="collect-start")
 def _goto_search(browser, query, city_code, ctrl, job_type="", degrees=None, experience=None, salary_min=None, salary_max=None, salary_fuzzy=False):
     """按关键词（+城市等筛选）导航到 BOSS 搜索结果页，并等待列表。返回 _wait_search_ready 的状态。"""
     params = []
@@ -383,6 +396,7 @@ def run_collection(count=20, safe_mode=True, fast=False, new_chrome=False,
         _dt("L3", "run_collection", "step_25_enter", {"query": query, "city": city_name or city_code or "current"})
 
         # ── L2: 登录态检测（前置）───────────────────────────────────
+        @_trace_span("BE-INTERNAL", "collector.py:_ensure_logged_in", "检测与确认登录状态", scope="collect-start")
         def _ensure_logged_in():
             """检测登录态，未登录则循环等待用户扫码登录，直到确认已登录才返回。"""
             # ── L3: 先强制导航到 BOSS，确保在正确域内再 probe ───────────

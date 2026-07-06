@@ -26,14 +26,17 @@ class Session:
 
         def _run():
             try:
-                debug_tracer.entry("session.py:_run", "分析线程开始", {"query": params.get("query")}, scope="start-collection")
-                run_collection(controller=ctrl, **params)
+                debug_tracer.span(
+                    "BE-ENTRY",
+                    "session.py:run_collection",
+                    "执行数据整理主任务",
+                    lambda: run_collection(controller=ctrl, **params),
+                    scope="start-collection"
+                )
             except Exception as exc:  # noqa: BLE001
                 debug_tracer.entry("session.py:_run", "分析线程异常", {"error": str(exc)}, scope="error")
                 ctrl.log(f"[ERROR] 分析线程异常: {exc}", level="error")
                 ctrl.status("error", str(exc))
-            finally:
-                debug_tracer.end_scope("start-collection")
 
         self.thread = threading.Thread(target=_run, name="helper_session", daemon=True)
         self.thread.start()
