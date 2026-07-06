@@ -1,11 +1,11 @@
 /**
  * Boss 助手前端调试追踪器
  *
- * 直接导出标准 @qin16778/tracelink tracer 单例。
+ * 直接导出标准 tracelink tracer 单例。
  * 开发环境自动连接 board 接收端 + 自动点击追踪。
  */
-import { tracer } from "@qin16778/tracelink";
-import { HttpSink } from "@qin16778/tracelink/browser";
+import { tracer } from "tracelink";
+import { HttpSink } from "tracelink/browser";
 
 // 开发环境：连接 board 接收端
 if (import.meta.env.DEV) {
@@ -13,7 +13,7 @@ if (import.meta.env.DEV) {
   tracer.configure({ enabled: true, httpSink: (log) => sink.send(log) });
 
   // 自动点击追踪
-  import("@qin16778/tracelink/browser")
+  import("tracelink/browser")
     .then(({ installAutoClick }) => installAutoClick())
     .catch(() => {});
 

@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@qin16778/tracelink": "^0.5.0",
     "pinia": "^2.1.7",
     "tracelink": "file:../../../debug_project/Trace_Link",
     "vue": "^3.4.21",
