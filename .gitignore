@@ -41,6 +41,7 @@ targets.json
 
 # Frontend (webui) - keep source, ignore deps & local npm config
 webui/node_modules/
+webui/.local-packages/
 node_modules/
 .tracelink/
 webui/.tracelink
