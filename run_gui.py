@@ -469,6 +469,7 @@ def _main_impl():
         x=x,
         y=y,
         min_size=(1024, 680),
+        text_select=True,
         js_api=pick_api,
     )
     pick_api._window = window
