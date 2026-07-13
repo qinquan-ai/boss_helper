@@ -28,7 +28,7 @@ Every event serializes to **one JSON object**, round-trippable as one NDJSON lin
 | `parentSpanId` | string | Parent span for nested calls. Filled automatically from ambient context, or passed explicitly (explicit wins). |
 | `userId` | string | Optional user id for multi-tenant backends. |
 
-> There is **no** `phase:'END'` field and **no** top-level `reason` field. These are frozen 0.5.0 decisions — do not invent them.
+> There is **no** `phase:'END'` field and **no** top-level `reason` field. These are frozen schema decisions — do not invent them.
 
 Example NDJSON line:
 
@@ -38,7 +38,7 @@ Example NDJSON line:
 
 ## Span open/close lifecycle
 
-`tracer.span(entry, fn)` (JS) / `debug_tracer.span(layer, fn, msg, func, ...)` (Python) follows an **open + close** model:
+`tracer.span(entry, fn)` (JS) / `tracer.span(layer, fn, msg, func, ...)` (Python) follows an **open + close** model:
 
 1. A fresh `spanId` is generated and a **span-open** event is emitted immediately (live visibility for long-running spans). The open event carries **no** `durationMs`/`async`.
 2. `fn`/`func` runs with that span installed as ambient context — children auto-nest, sharing `traceId` and pointing `parentSpanId` at this span.
@@ -57,7 +57,7 @@ Rules:
 4. Explicitly passing `parentSpanId` overrides the ambient value.
 5. `traceId` resolution when emitting: explicit `scope` → that scope's session/derived id; else enclosing span's `traceId`; else `'no-trace'` (JS) / a synthetic `trace-<ms>` (Python).
 
-Ambient context mechanism: JS core is synchronous; `@qin16778/tracelink/node` installs an `AsyncLocalStorage`-backed provider for correctness across `await`/concurrent async. Python uses `contextvars.ContextVar` (correct under asyncio/threads).
+Ambient context mechanism: JS core is synchronous; `tracelink/node` installs an `AsyncLocalStorage`-backed provider for correctness across `await`/concurrent async. Python uses `contextvars.ContextVar`, which is correct across nested calls, `await`, and concurrent asyncio tasks. Newly created OS threads require explicit context propagation.
 
 ## Layer normalization
 

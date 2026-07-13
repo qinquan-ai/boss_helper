@@ -25,35 +25,38 @@ Use it when the user asks you to:
 
 Do **not** use it when: the user only wants production logging (use
 `console.log` / stdlib `logging`); the bug is a syntax error (use a debugger); or
-you're in a production build (traces are tree-shaken / env-gated out — never ship
-live tracing or receiver code to prod).
+you're in a production build unless tracing is explicitly disabled or removed.
+Never ship a live Receiver or secrets in trace data, and do not assume every
+tracer call will be removed automatically by tree shaking.
 
 ## Install what you need
 
 ```bash
-npm i @qin16778/tracelink        # JS/TS sender (browser + Node), the board CLI, receiver — npm 0.5.0
-pip install tracelink            # Python sender (add [fastapi] for the middleware) — PyPI 0.6.0
+npm i tracelink                  # JS/TS sender, dashboard CLI, and Receiver
+pip install tracelink            # Python sender; add [fastapi] for middleware
 npx skills add qinquan-ai/Trace_Link   # install this skill into an agent
 ```
 
-To **see** traces you also need the board (receiver + dashboard) running:
+To **see** traces you also need the Receiver + Dashboard running:
 
 ```bash
-npx @qin16778/tracelink@latest board   # receiver on 127.0.0.1:5174, opens the dashboard
-node bin/tracelink.mjs board           # from a checkout of the repo
+npx tracelink dashboard            # in a project that has tracelink installed — instant, runs the local install
+npx tracelink@latest dashboard     # one-shot anywhere (no install) — @latest dodges npx's stale cache
+node bin/tracelink.mjs dashboard   # from a checkout of the repo
 ```
 
 - Dashboard UI: `http://127.0.0.1:5174/__debug_log/ui`; ingest: `POST /__debug_log`.
-- **Always use `@latest`** — plain `npx @qin16778/tracelink board` may run npx's
-  stale cache. Port/troubleshooting details: [`references/dashboard.md`](references/dashboard.md).
+- npx resolves the **local** `node_modules/.bin` first (walking up from cwd); only
+  without a local install does it hit the registry — then `@latest` matters.
+  Port/troubleshooting details: [`references/dashboard.md`](references/dashboard.md).
 
 ## Quickstart
 
 JS/TS — import the tracer, emit a log, wrap a step in a span:
 
 ```typescript
-import { tracer } from '@qin16778/tracelink';
-import '@qin16778/tracelink/node'; // once: async-correct span nesting across await (Node)
+import { tracer } from 'tracelink';
+import 'tracelink/node'; // once: async-correct span nesting across await (Node)
 
 tracer.startScope('delete-work');
 tracer.log({ layer: 'FE-ACTION', scope: 'delete-work', fn: 'Button:onClick', msg: 'clicked delete', data: { id: 123 } });
@@ -65,26 +68,28 @@ await tracer.span({ layer: 'BE-DB', fn: 'db.ts:remove', msg: 'delete row', scope
 tracer.endScope('delete-work');
 ```
 
-Python — `debug_tracer`, point it at the board, emit:
+Python — `tracer`, point it at the Dashboard, emit:
 
 ```python
-from tracelink import debug_tracer
-debug_tracer.configure(http_endpoint="http://127.0.0.1:5174/__debug_log")
+from tracelink import tracer
+tracer.configure(http_endpoint="http://127.0.0.1:5174/__debug_log")
 
-debug_tracer.start_scope('delete-work')
-debug_tracer.entry('router.py:delete', 'user clicked delete', {'user_id': 123}, scope='delete-work')
-debug_tracer.end_scope('delete-work')
+tracer.start_scope('delete-work')
+tracer.entry('router.py:delete', 'user clicked delete', {'user_id': 123}, scope='delete-work')
+tracer.end_scope('delete-work')
 ```
 
-To ship events to the board from the browser (not just the local sink), wire a
+To ship events to the Dashboard from the browser (not just the local sink), wire a
 sink once — `HttpSink` POSTs to `/__debug_log` by default:
 
 ```typescript
-import { HttpSink } from '@qin16778/tracelink/browser';
-tracer.configure({ httpSink: new HttpSink() });
+import { tracer } from 'tracelink';
+import { HttpSink } from 'tracelink/browser';
+const sink = new HttpSink();
+tracer.configure({ httpSink: sink.send.bind(sink) });
 ```
 
-For Node use `NodeHttpSink` from `@qin16778/tracelink/node` (absolute endpoint
+For Node use `NodeHttpSink` from `tracelink/node` (absolute endpoint
 required). Sink/entry-point details in [`references/api.md`](references/api.md)
 and [`references/senders.md`](references/senders.md).
 
@@ -110,7 +115,8 @@ Get these right or the dashboard/consumers misbehave:
 - **Don't put secrets in `data`** (it's sanitized, but truncate tokens yourself),
   don't log inside tight loops/frames, and don't hand-set `x-trace-id` /
   `x-debug-scopes` headers (sinks inject them).
-- **The npm package is one package with subpaths:** core `@qin16778/tracelink`;
+- **Git Ignore Rule**: Since `.tracelink/` stores local dev-time log files (`*.ndjson`) which change with every execution, **always add `.tracelink/` to the project's `.gitignore`** to prevent committing raw log files to git history.
+- **The npm package is one package with subpaths:** core `tracelink`;
   `/browser` (`HttpSink`, `installAutoClick`); `/node` (`NodeHttpSink`, async
   span context — side-effect import); `/receiver/http` (`startReceiverServer`);
   `/receiver/vite` (`debugLogPlugin`).
@@ -123,12 +129,12 @@ These constraints can also be enforced project-wide via a Cursor project rule (a
 Route to the deep detail you need (all in-directory relative links):
 
 - [`references/api.md`](references/api.md) — per-function API for JS `tracer.*`
-  and Python `debug_tracer.*` (signatures + examples; camelCase vs snake_case;
+  and Python `tracer.*` (signatures + examples; camelCase vs snake_case;
   what exists in one language but not the other).
 - [`references/wire-schema.md`](references/wire-schema.md) — the `TraceLog` data
   contract: full field list, `traceId`/`spanId`/`parentSpanId` propagation,
   layer normalization, `outcome`/`level` semantics, span open/close lifecycle.
-- [`references/dashboard.md`](references/dashboard.md) — how the board works,
+- [`references/dashboard.md`](references/dashboard.md) — how the Dashboard works,
   every receiver endpoint, the port model, and the `5173`/`5174` port footgun
   (Vite stealing `5174`; `--force` is cooperative, not a kill).
 - [`references/senders.md`](references/senders.md) — the Python sender, and how

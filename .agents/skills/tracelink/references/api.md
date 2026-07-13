@@ -1,6 +1,6 @@
 # API reference
 
-Per-function API for the JS core (`import { tracer } from '@qin16778/tracelink'`) and the Python sender (`from tracelink import debug_tracer`). Only functions that exist in the source are listed.
+Per-function API for the JS core (`import { tracer } from 'tracelink'`) and the Python sender (`from tracelink import tracer`). Only functions that exist in the source are listed.
 
 **Naming:** JS is camelCase, Python is snake_case. The biggest surface difference: **JS has a generic `tracer.log(entry)`; Python does not** — Python emits via per-layer methods (`entry`/`internal`/`db`/`ws`/`custom`). Wire field names are camelCase in both languages (see [wire-schema.md](wire-schema.md)).
 
@@ -29,14 +29,14 @@ tracer.custom('X-RENDER', fn, msg, data?);   // any X-* custom layer
 
 ### Python — per-layer methods
 
-There is no `debug_tracer.log(...)`. Emit with the layer-specific method. Signature (keyword-only after `data`): `(fn, msg, data=None, *, level=None, scope=None, user_id=None, parent_span_id=None)` — note `entry()` does **not** accept `parent_span_id`.
+There is no `tracer.log(...)`. Emit with the layer-specific method. Signature (keyword-only after `data`): `(fn, msg, data=None, *, level=None, scope=None, user_id=None, parent_span_id=None)` — note `entry()` does **not** accept `parent_span_id`.
 
 ```python
-debug_tracer.entry('router.py:delete', 'user clicked delete', {'id': 1}, scope='delete-work')  # BE-ENTRY
-debug_tracer.internal('svc.py:check', 'validating', scope='delete-work')                        # BE-INTERNAL
-debug_tracer.db('repo.py:remove', 'DELETE row', {'id': 1}, scope='delete-work')                 # BE-DB
-debug_tracer.ws('ws.py:push', 'notify client')                                                  # BE-WS
-debug_tracer.custom('X-LLM', 'agent.py:call', 'openai chat', {'model': 'gpt'})                  # X-* custom (auto-normalized)
+tracer.entry('router.py:delete', 'user clicked delete', {'id': 1}, scope='delete-work')  # BE-ENTRY
+tracer.internal('svc.py:check', 'validating', scope='delete-work')                        # BE-INTERNAL
+tracer.db('repo.py:remove', 'DELETE row', {'id': 1}, scope='delete-work')                 # BE-DB
+tracer.ws('ws.py:push', 'notify client')                                                  # BE-WS
+tracer.custom('X-LLM', 'agent.py:call', 'openai chat', {'model': 'gpt'})                  # X-* custom (auto-normalized)
 ```
 
 ---
@@ -47,22 +47,22 @@ A span emits a **span-open** event immediately (no `durationMs`), runs `fn` with
 
 ### JS — `tracer.span(entry, fn)`
 
-Returns `fn()`'s value. Import `@qin16778/tracelink/node` once (side-effect) for async-correct nesting across `await`.
+Returns `fn()`'s value. Import `tracelink/node` once (side-effect) for async-correct nesting across `await`.
 
 ```typescript
-import '@qin16778/tracelink/node';
+import 'tracelink/node';
 await tracer.span({ layer: 'X-AGENT', fn: 'agent:run', msg: 'agent.run', scope: 'agent-run' }, async () => {
   await tracer.span({ layer: 'X-TOOL', fn: 'agent:search', msg: 'tool: search' }, async () => { /* ... */ });
 });
 ```
 
-### Python — `debug_tracer.span(layer, fn, msg, func, *, data=None, level=None, scope=None, user_id=None)`
+### Python — `tracer.span(layer, fn, msg, func, *, data=None, level=None, scope=None, user_id=None)`
 
-`func` is a zero-arg callable (sync or returning an awaitable). Returns `func()`'s value (a coroutine when async — so `await` it). Context is backed by `contextvars`, correct under `asyncio`/threads/nested `await`.
+`func` is a zero-arg callable (sync or returning an awaitable). Returns `func()`'s value (a coroutine when async — so `await` it). Context is backed by `contextvars`, correct across nested calls, `await`, and concurrent asyncio tasks. A newly created OS thread needs explicit context propagation.
 
 ```python
 async def body(): ...
-await debug_tracer.span('X-AGENT', 'agent.py:run', 'agent.run', body, scope='agent-run-py')
+await tracer.span('X-AGENT', 'agent.py:run', 'agent.run', body, scope='agent-run-py')
 ```
 
 ---
@@ -86,12 +86,12 @@ tracer.intent('agent:plan', 'skipped pricey deep-research tool', {
 });
 ```
 
-### Python — `debug_tracer.blocked(fn, msg, *, reason=None, data=None, layer='BE-INTERNAL', level='warn', scope=None, user_id=None, parent_span_id=None)` / `intent(... level='info')`
+### Python — `tracer.blocked(fn, msg, *, reason=None, data=None, layer='BE-INTERNAL', level='warn', scope=None, user_id=None, parent_span_id=None)` / `intent(... level='info')`
 
 ```python
-debug_tracer.blocked('agent.py:sub', 'write outside sandbox denied',
+tracer.blocked('agent.py:sub', 'write outside sandbox denied',
                      reason='permission denied', data={'path': '/etc/passwd'}, layer='X-AGENT')
-debug_tracer.intent('agent.py:plan', 'skipped pricey tool',
+tracer.intent('agent.py:plan', 'skipped pricey tool',
                     reason='cost budget exceeded', data={'tool': 'deep_research'}, layer='X-AGENT')
 ```
 
@@ -103,10 +103,10 @@ Wrap a chain so all events share one `traceId` and you get an elapsed duration.
 
 | JS | Python | Returns |
 |---|---|---|
-| `tracer.startScope(scope)` | `debug_tracer.start_scope(scope, custom_id?)` | `traceId` (string) |
-| `tracer.endScope(scope)` | `debug_tracer.end_scope(scope)` | duration ms (`number`/`int`) or `null`/`None` |
-| `tracer.getTraceId(scope)` | `debug_tracer.get_trace_id(scope)` | `traceId` or undefined/None |
-| `tracer.getActiveScopes()` | `debug_tracer.get_active_scopes()` | `string[]` |
+| `tracer.startScope(scope)` | `tracer.start_scope(scope, custom_id?)` | `traceId` (string) |
+| `tracer.endScope(scope)` | `tracer.end_scope(scope)` | duration ms (`number`/`int`) or `null`/`None` |
+| `tracer.getTraceId(scope)` | `tracer.get_trace_id(scope)` | `traceId` or undefined/None |
+| `tracer.getActiveScopes()` | `tracer.get_active_scopes()` | `string[]` |
 
 **Two patterns:** *session mode* (call `startScope`/`endScope` around the chain — best for parallel ops / needing elapsed time); *stream mode* (just pass `scope` on each event, the scope name becomes the `traceId` — best for singletons/continuous streams with no clear end).
 
@@ -118,11 +118,11 @@ Toggle collection at runtime without restarting. `['*']` = all enabled (default)
 
 | JS | Python |
 |---|---|
-| `tracer.enableScope(scope)` | `debug_tracer.enable_scope(scope)` |
-| `tracer.disableScope(scope)` | `debug_tracer.disable_scope(scope)` |
-| `tracer.enableAllScopes()` | `debug_tracer.enable_all_scopes()` |
-| `tracer.disableAllScopes()` | `debug_tracer.disable_all_scopes()` |
-| `tracer.getEnabledScopes()` | `debug_tracer.get_enabled_scopes()` |
+| `tracer.enableScope(scope)` | `tracer.enable_scope(scope)` |
+| `tracer.disableScope(scope)` | `tracer.disable_scope(scope)` |
+| `tracer.enableAllScopes()` | `tracer.enable_all_scopes()` |
+| `tracer.disableAllScopes()` | `tracer.disable_all_scopes()` |
+| `tracer.getEnabledScopes()` | `tracer.get_enabled_scopes()` |
 
 Let a **dashboard** flip scopes on live JS senders by opting into scopeSync (the tracer polls the receiver `/scopes` endpoint and applies the authoritative `enabled` list):
 
@@ -144,8 +144,8 @@ tracer.registerLayer('X-RENDER', { description: 'Three.js frame', color: '#88ff8
 tracer.getRegisteredLayers();
 ```
 ```python
-debug_tracer.register_layer('X-RENDER', { 'description': 'Three.js frame', 'color': '#88ff88' })
-debug_tracer.get_registered_layers()
+tracer.register_layer('X-RENDER', { 'description': 'Three.js frame', 'color': '#88ff88' })
+tracer.get_registered_layers()
 ```
 
 ---
@@ -159,11 +159,11 @@ const off = tracer.addSink((log) => myCollector.send(log));
 off(); // unregister
 ```
 ```python
-off = debug_tracer.add_sink(lambda log: my_collector.send(log))
+off = tracer.add_sink(lambda log: my_collector.send(log))
 off()
 ```
 
-JS also has `tracer.configure({ httpSink })` for the single reconfigurable HTTP sink slot. Python has `debug_tracer.configure(http_endpoint=..., http_sink=..., http_timeout_ms=2000, http_extra_headers=..., http_disabled=False)` which builds/installs a non-blocking HTTP sink and returns it (so you can `.flush()` before exit).
+JS also has `tracer.configure({ httpSink })` for the single reconfigurable HTTP sink slot. Python has `tracer.configure(http_endpoint=..., http_sink=..., http_timeout_ms=2000, http_extra_headers=..., http_disabled=False)` which builds/installs a non-blocking HTTP sink and returns it (so you can `.flush()` before exit).
 
 ---
 
@@ -171,12 +171,12 @@ JS also has `tracer.configure({ httpSink })` for the single reconfigurable HTTP 
 
 | Purpose | JS | Python |
 |---|---|---|
-| Enable / disable all sinks | `tracer.enable()` / `tracer.disable()` | `debug_tracer.set_enabled(bool)` |
-| Query enabled | `tracer.isEnabled()` | `debug_tracer.is_enabled()` |
+| Enable / disable all sinks | `tracer.enable()` / `tracer.disable()` | `tracer.set_enabled(bool)` |
+| Query enabled | `tracer.isEnabled()` | `tracer.is_enabled()` |
 | In-memory counts summary | `tracer.summary()` → `{ total, byLayer, byScope }` | *(no equivalent)* |
-| All buffered logs | `tracer.allLogs()` | `debug_tracer.get_logs()` |
-| Clear in-memory buffer | `tracer.clearMemory()` | `debug_tracer.clear()` |
-| Delete the on-disk trace files | *(via receiver `DELETE /__debug_log`)* | `debug_tracer.reset_files()` |
+| All buffered logs | `tracer.allLogs()` | `tracer.get_logs()` |
+| Clear in-memory buffer | `tracer.clearMemory()` | `tracer.clear()` |
+| Delete the on-disk trace files | *(via receiver `DELETE /__debug_log`)* | `tracer.reset_files()` |
 
 > **Honest gaps:** Python has **no** `summary()` and **no** generic `log()`. JS `clearMemory()` only clears the in-memory ring buffer (default cap 1000), not the `.tracelink/` files — to clear files, use the receiver's `DELETE /__debug_log` (see [dashboard.md](dashboard.md)).
 
@@ -184,17 +184,17 @@ JS also has `tracer.configure({ httpSink })` for the single reconfigurable HTTP 
 
 ## Package entry points
 
-**JS `@qin16778/tracelink` subpaths** (from `package.json` `exports`):
+**JS `tracelink` subpaths** (from `package.json` `exports`):
 
 | Import | Exports |
 |---|---|
-| `@qin16778/tracelink` | `tracer`, `scopeController`, `MemorySink`, `BUILTIN_LAYERS`, `isBuiltinLayer`, `isCustomLayer`, `normalizeLayer`, `sanitize`, `sanitizeData`, `formatTs`, `makeTraceId`, `makeSpanId`, `now`, `currentSpan`, `runInSpan`, `setContextProvider`, `StackContextProvider` + types |
-| `@qin16778/tracelink/browser` | `HttpSink`, `installAutoClick`, `enableAutoClick`, `disableAutoClick` |
-| `@qin16778/tracelink/browser/auto-click` | auto-click instrumentation only |
-| `@qin16778/tracelink/node` | `NodeHttpSink`, `AlsContextProvider`, `installNodeAsyncContext` — **side-effect:** importing installs `AsyncLocalStorage` span context |
-| `@qin16778/tracelink/receiver/http` | `startReceiverServer`, `createReceiverHandler`, `RECEIVER_VERSION` |
-| `@qin16778/tracelink/receiver/vite` | `debugLogPlugin` |
+| `tracelink` | `tracer`, `scopeController`, `MemorySink`, `BUILTIN_LAYERS`, `isBuiltinLayer`, `isCustomLayer`, `normalizeLayer`, `sanitize`, `sanitizeData`, `formatTs`, `makeTraceId`, `makeSpanId`, `now`, `currentSpan`, `runInSpan`, `setContextProvider`, `StackContextProvider` + types |
+| `tracelink/browser` | `HttpSink`, `installAutoClick`, `enableAutoClick`, `disableAutoClick` |
+| `tracelink/browser/auto-click` | auto-click instrumentation only |
+| `tracelink/node` | `NodeHttpSink`, `AlsContextProvider`, `installNodeAsyncContext` — **side-effect:** importing installs `AsyncLocalStorage` span context |
+| `tracelink/receiver/http` | `startReceiverServer`, `createReceiverHandler`, `RECEIVER_VERSION` |
+| `tracelink/receiver/vite` | `debugLogPlugin` |
 
-**Python `tracelink` package** exports: `debug_tracer` (singleton), `DebugTracer`, `Sink`, `HttpSink`, `TraceMiddleware` (lazy — needs the `[fastapi]` extra), `SpanContext`, `current_span`, `TraceLayer`, `TraceLog`, `LogLevel`, `Outcome`, `TraceOutcome`, `BUILTIN_LAYERS`, `is_builtin_layer`, `is_custom_layer`, `normalize_layer`, `__version__`.
+**Python `tracelink` package** exports: `tracer` (singleton), `Tracer`, `Sink`, `HttpSink`, `TraceMiddleware` (lazy — needs the `[fastapi]` extra), `SpanContext`, `current_span`, `TraceLayer`, `TraceLog`, `LogLevel`, `Outcome`, `TraceOutcome`, `BUILTIN_LAYERS`, `is_builtin_layer`, `is_custom_layer`, `normalize_layer`, `__version__`.
 
 Sink wiring examples (HttpSink / NodeHttpSink / Vite / node:http receiver / FastAPI middleware) are in [senders.md](senders.md) and [dashboard.md](dashboard.md).

@@ -1,29 +1,29 @@
 # Senders — Python & other languages
 
-**Architecture:** there is **one** receiver + dashboard (the Node one — `npx @qin16778/tracelink@latest board`, see [dashboard.md](dashboard.md)). Every language ships a **sender** only: the `TraceLog` schema + a minimal tracer + an HTTP transport that POSTs events to that shared receiver. You **rarely need a per-language receiver** — one Node receiver serves senders written in any language. Full normative contract: [CONFORMANCE.md](https://github.com/qinquan-ai/Trace_Link/blob/main/senders/CONFORMANCE.md).
+**Architecture:** a trace session chooses one authoritative Receiver + Dashboard (start the Node Receiver with `npx tracelink@latest dashboard`, see [dashboard.md](dashboard.md)). Every language ships a **sender**: the `TraceLog` schema + a minimal tracer + an HTTP transport that POSTs events to the selected Receiver. You **rarely need a per-language Receiver** because the same Node Receiver accepts senders written in any language. Full normative contract: [CONFORMANCE.md](https://github.com/qinquan-ai/Trace_Link/blob/main/senders/CONFORMANCE.md).
 
 ## Python sender
 
-`pip install tracelink` (add `[fastapi]` for the middleware). **Sender-only** — there is no Python CLI/receiver; point it at the Node board.
+`pip install tracelink` (add `[fastapi]` for the middleware). **Sender-only** — there is no Python CLI/receiver; point it at the Node Receiver + Dashboard.
 
 ```python
-from tracelink import debug_tracer
+from tracelink import tracer
 
-# One-line HTTP sink → the shared board on 5174 (returns the sink so you can .flush())
-sink = debug_tracer.configure(http_endpoint="http://127.0.0.1:5174/__debug_log")
+# One-line HTTP sink → the shared Dashboard on 5174 (returns the sink so you can .flush())
+sink = tracer.configure(http_endpoint="http://127.0.0.1:5174/__debug_log")
 
-debug_tracer.start_scope('delete-work')
-debug_tracer.entry('router.py:delete', 'user clicked delete', {'id': 123}, scope='delete-work')
-debug_tracer.db('repo.py:remove', 'DELETE row', {'id': 123}, scope='delete-work')
-debug_tracer.end_scope('delete-work')
+tracer.start_scope('delete-work')
+tracer.entry('router.py:delete', 'user clicked delete', {'id': 123}, scope='delete-work')
+tracer.db('repo.py:remove', 'DELETE row', {'id': 123}, scope='delete-work')
+tracer.end_scope('delete-work')
 ```
 
 Or build the sink explicitly and register it:
 
 ```python
-from tracelink import debug_tracer
+from tracelink import tracer
 from tracelink.sinks.http import HttpSink
-off = debug_tracer.add_sink(HttpSink(endpoint="http://127.0.0.1:5174/__debug_log"))  # default endpoint is this
+off = tracer.add_sink(HttpSink(endpoint="http://127.0.0.1:5174/__debug_log"))  # default endpoint is this
 ```
 
 FastAPI / Starlette middleware (needs the `[fastapi]` extra) auto-reads the `x-trace-id` / `x-debug-scopes` headers a JS sender injects, so a frontend chain and its backend continuation line up automatically:
@@ -58,15 +58,17 @@ Reference implementations to mirror: JS `src/`, Python `senders/python/tracelink
 
 ```typescript
 // Browser: POSTs to '/__debug_log' by default (same origin)
-import { tracer } from '@qin16778/tracelink';
-import { HttpSink } from '@qin16778/tracelink/browser';
-tracer.configure({ httpSink: new HttpSink() });
+import { tracer } from 'tracelink';
+import { HttpSink } from 'tracelink/browser';
+const sink = new HttpSink();
+tracer.configure({ httpSink: sink.send.bind(sink) });
 ```
 ```typescript
 // Node (Express / Hono / Next.js API / Electron main) — absolute endpoint required
-import { tracer } from '@qin16778/tracelink';
-import { NodeHttpSink } from '@qin16778/tracelink/node'; // side-effect: installs async span context
-tracer.configure({ httpSink: new NodeHttpSink({ endpoint: 'http://127.0.0.1:5174/__debug_log' }) });
+import { tracer } from 'tracelink';
+import { NodeHttpSink } from 'tracelink/node'; // side-effect: installs async span context
+const sink = new NodeHttpSink({ endpoint: 'http://127.0.0.1:5174/__debug_log' });
+tracer.configure({ httpSink: sink.send.bind(sink) });
 ```
 
 `HttpSink` (browser) / `NodeHttpSink` (Node) options: `endpoint`, `disabled`, `getEnabledScopes` (browser); plus `timeoutMs` (default 2000) and `extraHeaders` (Node). Both auto-inject the correlation headers.

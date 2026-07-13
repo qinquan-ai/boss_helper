@@ -1,7 +1,7 @@
 <!-- GlassMultiSelect.vue — 自定义毛玻璃多选下拉选择 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { trace } from "@/utils/debugTracer";
+import { tracer } from "@/utils/tracer";
 
 const props = withDefaults(
   defineProps<{
@@ -45,13 +45,13 @@ function toggle(o: string) {
   const newList = list.includes(o)
     ? list.filter((x) => x !== o)
     : [...list, o];
-  trace.api("GlassMultiSelect:toggle", `切换多选: ${o}`, { newValue: newList });
+  tracer.api("GlassMultiSelect:toggle", `切换多选: ${o}`, { newValue: newList });
   emit("update:modelValue", newList);
 }
 
 // 清除所有选中项
 function clearAll() {
-  trace.api("GlassMultiSelect:clear", `清除全部已选: ${props.label}`, {});
+  tracer.api("GlassMultiSelect:clear", `清除全部已选: ${props.label}`, {});
   emit("update:modelValue", []);
 }
 

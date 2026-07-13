@@ -6,9 +6,9 @@ from src.core.js_loader import load_js
 
 
 def _dt(fn: str, msg: str, data: dict | None = None):
-    """写入 debug_tracer（延迟导入避免循环依赖）。"""
-    from server.debug_tracer import debug_tracer
-    debug_tracer.internal(f"browser_behavior.py:{fn}", msg, data or {})
+    """写入 tracer（延迟导入避免循环依赖）。"""
+    from server.tracer import tracer
+    tracer.internal(f"browser_behavior.py:{fn}", msg, data or {})
 
 
 class BrowserBehavior:

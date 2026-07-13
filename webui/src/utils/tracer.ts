@@ -2,12 +2,12 @@
  * Boss 助手前端调试追踪器
  *
  * 直接导出标准 tracelink tracer 单例。
- * 开发环境自动连接 board 接收端 + 自动点击追踪。
+ * 开发环境自动连接 Dashboard Receiver + 自动点击追踪。
  */
 import { tracer } from "tracelink";
 import { HttpSink } from "tracelink/browser";
 
-// 开发环境：连接 board 接收端
+// 开发环境：连接 Dashboard Receiver
 if (import.meta.env.DEV) {
   const sink = new HttpSink({ endpoint: "http://127.0.0.1:5174/__debug_log" });
   tracer.configure({ enabled: true, httpSink: (log) => sink.send(log) });
@@ -28,4 +28,4 @@ if (typeof window !== "undefined") {
   (window as unknown as Record<string, unknown>).__trace = tracer;
 }
 
-export { tracer as trace };
+export { tracer };

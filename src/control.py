@@ -54,20 +54,20 @@ class GuiController(BaseController):
             return
         self.events.put({"type": "log", "level": level, "msg": text})
         if level == "error":
-            import server.debug_tracer as dt
-            dt.debug_tracer.entry("control.py:GuiController.log", "引擎错误", {"msg": text[:200]}, scope="error")
+            import server.tracer as dt
+            dt.tracer.entry("control.py:GuiController.log", "引擎错误", {"msg": text[:200]}, scope="error")
 
     def progress(self, done, total, stats=None):
         self.latest_progress = {"done": done, "total": total, "stats": stats or {}}
         self.events.put({"type": "progress", "done": done, "total": total, "stats": stats or {}})
-        import server.debug_tracer as dt
-        dt.debug_tracer.internal("control.py:GuiController.progress", "进度更新", {"done": done, "total": total}, scope="collect-start")
+        import server.tracer as dt
+        dt.tracer.internal("control.py:GuiController.progress", "进度更新", {"done": done, "total": total}, scope="collect-start")
 
     def status(self, state, detail=None):
         self.state = state
         self.events.put({"type": "status", "state": state, "detail": detail})
-        import server.debug_tracer as dt
-        dt.debug_tracer.internal("control.py:GuiController.status", f"状态切换: {state}", {"detail": str(detail)[:200] if detail else None}, scope="collect-start")
+        import server.tracer as dt
+        dt.tracer.internal("control.py:GuiController.status", f"状态切换: {state}", {"detail": str(detail)[:200] if detail else None}, scope="collect-start")
 
     def wait_user(self, reason, kind="confirm"):
         self._resume.clear()
@@ -91,14 +91,14 @@ class GuiController(BaseController):
         return self._paused.is_set()
 
     def _wait_paused(self):
-        import server.debug_tracer as dt
-        dt.debug_tracer.internal("control.py:GuiController._wait_paused", "已进入暂停状态，等待继续 ...", {}, scope="collect-start")
+        import server.tracer as dt
+        dt.tracer.internal("control.py:GuiController._wait_paused", "已进入暂停状态，等待继续 ...", {}, scope="collect-start")
         while True:
             if self._stop.is_set():
-                dt.debug_tracer.internal("control.py:GuiController._wait_paused", "暂停中收到停止信号，退出", {}, scope="collect-start")
+                dt.tracer.internal("control.py:GuiController._wait_paused", "暂停中收到停止信号，退出", {}, scope="collect-start")
                 return
             if not self._paused.is_set():
-                dt.debug_tracer.internal("control.py:GuiController._wait_paused", "收到继续信号，恢复运行", {}, scope="collect-start")
+                dt.tracer.internal("control.py:GuiController._wait_paused", "收到继续信号，恢复运行", {}, scope="collect-start")
                 return
             self._paused.wait(0.2)
 
@@ -109,15 +109,15 @@ class GuiController(BaseController):
 
     def request_pause(self):
         if not self._stop.is_set():
-            import server.debug_tracer as dt
-            dt.debug_tracer.internal("control.py:GuiController.request_pause", "收到暂停请求", {}, scope="collect-start")
+            import server.tracer as dt
+            dt.tracer.internal("control.py:GuiController.request_pause", "收到暂停请求", {}, scope="collect-start")
             self._paused.set()
             self.status("paused")
 
     def request_resume(self):
         if self._paused.is_set():
-            import server.debug_tracer as dt
-            dt.debug_tracer.internal("control.py:GuiController.request_resume", "收到继续请求", {}, scope="collect-start")
+            import server.tracer as dt
+            dt.tracer.internal("control.py:GuiController.request_resume", "收到继续请求", {}, scope="collect-start")
         self._paused.clear()
         self.status("running")
 

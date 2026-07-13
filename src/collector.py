@@ -5,19 +5,19 @@ from urllib.parse import quote
 
 
 def _dt(scope: str, fn: str, msg: str, data: dict | None = None):
-    """写入 debug_tracer（延迟导入避免循环依赖）。"""
-    from server.debug_tracer import debug_tracer
-    debug_tracer.internal(f"collector.py:{fn}", msg, data or {}, scope=scope)
+    """写入 tracer（延迟导入避免循环依赖）。"""
+    from server.tracer import tracer
+    tracer.internal(f"collector.py:{fn}", msg, data or {}, scope=scope)
 
 
 def _trace_span(layer: str, fn: str, msg: str, scope: str = None):
     """用于包裹执行函数的 TraceLink 追踪装饰器。"""
     def decorator(func):
-        from server.debug_tracer import debug_tracer
+        from server.tracer import tracer
         import functools
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            return debug_tracer.span(layer, fn, msg, lambda: func(*args, **kwargs), scope=scope)
+            return tracer.span(layer, fn, msg, lambda: func(*args, **kwargs), scope=scope)
         return wrapper
     return decorator
 

@@ -94,7 +94,7 @@ boss-helper/
 ├── server/                  # FastAPI backend (serves webui + WebSocket)
 │   ├── app.py
 │   ├── session.py
-│   └── debug_tracer.py
+│   └── tracer.py
 ├── webui/                   # Vue 3 + Vite + Tailwind frontend
 │   └── src/
 │       ├── components/       # Vue components
