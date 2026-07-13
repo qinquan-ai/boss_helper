@@ -9,8 +9,16 @@ import { HttpSink } from "tracelink/browser";
 
 // 开发环境：连接 Dashboard Receiver
 if (import.meta.env.DEV) {
-  const sink = new HttpSink({ endpoint: "http://127.0.0.1:5174/__debug_log" });
-  tracer.configure({ enabled: true, httpSink: (log) => sink.send(log) });
+  const receiverEndpoint = "http://127.0.0.1:5174/__debug_log";
+  const sink = new HttpSink({
+    endpoint: receiverEndpoint,
+    getEnabledScopes: () => tracer.getEnabledScopes(),
+  });
+  tracer.configure({
+    enabled: true,
+    httpSink: (log) => sink.send(log),
+    scopeSync: { endpoint: `${receiverEndpoint}/scopes` },
+  });
 
   // 自动点击追踪
   import("tracelink/browser")

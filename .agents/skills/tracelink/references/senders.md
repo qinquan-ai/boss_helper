@@ -35,7 +35,7 @@ app = FastAPI()
 app.add_middleware(TraceMiddleware)
 ```
 
-The HTTP sink is **non-blocking** (POSTs on a background daemon thread, drops on a full queue) and **fail-safe** (swallows all network errors), using only stdlib `urllib.request`. Python is env-gated: it's enabled when `DEBUG`/`DEV` is set, or forced via `TRACELINK_ENABLED=true`/`false`; scope filter via `TRACELINK_SCOPES` (`*` or comma-separated).
+The HTTP sink is **non-blocking** (POSTs on a background daemon thread, drops on a full queue) and **fail-safe** (swallows all network errors), using only stdlib `urllib.request`. Python is env-gated: it's enabled when `DEBUG`/`DEV` is set, or forced via `TRACELINK_ENABLED=true`/`false`; its startup Scope filter comes from `TRACELINK_SCOPES` (`*` or comma-separated). Pass `scope_sync_endpoint="http://127.0.0.1:5174/__debug_log/scopes"` to `tracer.configure(...)` to keep that filter synchronized through the Receiver's dedicated SSE control stream.
 
 > **Do not** hand-set `x-trace-id` / `x-debug-scopes` — the sinks inject them.
 

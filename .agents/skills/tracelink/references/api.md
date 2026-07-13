@@ -124,14 +124,21 @@ Toggle collection at runtime without restarting. `['*']` = all enabled (default)
 | `tracer.disableAllScopes()` | `tracer.disable_all_scopes()` |
 | `tracer.getEnabledScopes()` | `tracer.get_enabled_scopes()` |
 
-Let a **dashboard** flip scopes on live JS senders by opting into scopeSync (the tracer polls the receiver `/scopes` endpoint and applies the authoritative `enabled` list):
+Let a **dashboard** flip scopes on live JS and Python senders by opting into Scope sync. The Receiver stores the authoritative `enabled` list and pushes an immediate snapshot plus later changes over a dedicated SSE control stream; each SDK applies the policy at the event source:
 
 ```typescript
-tracer.configure({ scopeSync: { endpoint: 'http://localhost:5174/__debug_log/scopes', intervalMs: 2000 } });
-tracer.stopScopeSync(); // stop polling
+tracer.configure({ scopeSync: { endpoint: 'http://localhost:5174/__debug_log/scopes' } });
+tracer.stopScopeSync(); // close the control stream
 ```
 
-Python honors `TRACELINK_SCOPES` env (`*` or comma-separated) at startup; it has no scopeSync poller.
+```python
+tracer.configure(
+    scope_sync_endpoint='http://localhost:5174/__debug_log/scopes',
+)
+tracer.stop_scope_sync()
+```
+
+Python also honors `TRACELINK_SCOPES` (`*` or comma-separated) as its startup policy before an optional Receiver sync applies.
 
 ---
 
@@ -163,7 +170,7 @@ off = tracer.add_sink(lambda log: my_collector.send(log))
 off()
 ```
 
-JS also has `tracer.configure({ httpSink })` for the single reconfigurable HTTP sink slot. Python has `tracer.configure(http_endpoint=..., http_sink=..., http_timeout_ms=2000, http_extra_headers=..., http_disabled=False)` which builds/installs a non-blocking HTTP sink and returns it (so you can `.flush()` before exit).
+JS also has `tracer.configure({ httpSink })` for the single reconfigurable HTTP sink slot. Python has `tracer.configure(http_endpoint=..., http_sink=..., http_timeout_ms=2000, http_extra_headers=..., http_disabled=False, scope_sync_endpoint=..., scope_sync_reconnect_ms=1000)` which builds/installs a non-blocking HTTP sink, optionally starts Scope SSE synchronization, and returns the sink (so you can `.flush()` before exit).
 
 ---
 

@@ -9,7 +9,9 @@ from tracelink import tracer
 
 # 连接 Dashboard Receiver
 receiver_port = os.getenv("TRACELINK_PORT", "5174")
+receiver_endpoint = f"http://127.0.0.1:{receiver_port}/__debug_log"
 tracer.configure(
-    http_endpoint=f"http://127.0.0.1:{receiver_port}/__debug_log",
-    http_timeout_ms=2000
+    http_endpoint=receiver_endpoint,
+    http_timeout_ms=2000,
+    scope_sync_endpoint=f"{receiver_endpoint}/scopes",
 )

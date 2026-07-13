@@ -44,6 +44,7 @@ All under the ingest path `/__debug_log` (or the Vite mount). Every response car
 | `GET` | `/__debug_log/scopes` | Read `{ enabled, known }` (authoritative enabled scopes + persisted Scope catalog) | `200` JSON |
 | `POST` | `/__debug_log/scopes` | Set authoritative enabled scopes (body `{ enabled }`); persists the complete Scope state | `204` |
 | `DELETE` | `/__debug_log/scopes` | Reset to `{ enabled: ["*"], known: [] }`; trace history is unchanged | `204` |
+| `GET` | `/__debug_log/scopes/stream` | SSE Scope-control stream: immediate policy snapshot, then every enabled-list change | `200` SSE |
 | `GET` | `/__debug_log/ui` | Serve the embedded single-file dashboard | `200` `text/html` |
 | `OPTIONS` | any subpath | CORS preflight | `204` |
 
