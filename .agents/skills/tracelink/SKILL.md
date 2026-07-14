@@ -16,7 +16,8 @@ searchable, fail-safe, and disabled in production.
    - Browser: `tracelink/browser`
    - Node: `tracelink/node`
    - Python: `tracelink`
-4. Register an HTTP Exporter that targets the Receiver.
+4. Register an HTTP Exporter that targets the Receiver. In Python, pass
+   `file_enabled=False` when a Receiver in the same project owns `.tracelink/`.
 5. Add spans at meaningful boundaries: user action, request entry, service call,
    database operation, tool call, guardrail, or background task.
 6. Propagate context on business HTTP requests when crossing processes.

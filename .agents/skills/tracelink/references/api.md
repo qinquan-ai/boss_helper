@@ -37,9 +37,16 @@ Package entries:
 | `tracer.add_exporter(exporter)` | Register an exporter; returns unsubscribe |
 | `tracer.configure(...)` | Configure HTTP exporter and Scope SSE control |
 | `HttpExporter` | Bounded background HTTP export |
+| `FileExporter` | Optional local NDJSON and readable-text output |
 | `create_trace_headers()` | Build outgoing business-request headers |
 | `TraceMiddleware` | FastAPI/Starlette incoming context extension |
 
 `tracer.configure(http_endpoint=...)` returns the `HttpExporter`; call
 `flush()` only for short-lived scripts. Startup enablement follows
 `TRACELINK_ENABLED`, then `DEBUG`/`DEV` unless `enabled=` is passed.
+
+Python enables `FileExporter` by default. Pass `file_enabled=False` when a
+Receiver in the same project owns `.tracelink/`; otherwise both can write the
+same files and produce duplicate rows. `TraceMiddleware` installs propagated
+context but does not create application spans; instrument route or service
+boundaries explicitly.
