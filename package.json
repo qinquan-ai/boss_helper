@@ -11,6 +11,7 @@
     "sdk:refresh:javascript": "npm --prefix webui run sdk:refresh",
     "sdk:refresh:python": ".venv\\Scripts\\python -m pip install -e \"../../debug_project/Trace_Link/sdks/python[fastapi]\"",
     "sdk:refresh": "npm run sdk:refresh:javascript && npm run sdk:refresh:python",
-    "dashboard": "npm --prefix webui exec -- tracelink dashboard"
+    "dashboard": "npm --prefix webui exec -- tracelink dashboard",
+    "release": "node scripts/release.js"
   }
 }
