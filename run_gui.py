@@ -83,8 +83,6 @@ def _load_env() -> dict[str, str]:
         "BOSS_DEV_BACKEND_PORT": "8848",
         "BOSS_DEV_VITE_PORT": "5173",
         "BOSS_OUTPUT_DIR": "output/",
-        "DEBUG_TRACE": "true",
-        "DEBUG_TRACE_SCOPES": "config,error",
     }
     if os.path.exists(_ENV_FILE):
         with open(_ENV_FILE, "r", encoding="utf-8") as f:
@@ -280,8 +278,8 @@ class _PickApi:
 
     def save_file(self, filename: str, content: str) -> str:
         try:
-            from server.debug_tracer import debug_tracer
-            debug_tracer.entry("PickApi:save_file", f"请求保存文件: {filename}", {"filename": filename})
+            from server.tracer import tracer
+            tracer.entry("PickApi:save_file", f"请求保存文件: {filename}", {"filename": filename})
             res = self._window.create_file_dialog(
                 self._webview.SAVE_DIALOG,
                 save_filename=filename,
@@ -291,14 +289,14 @@ class _PickApi:
                 save_path = res[0]
                 with open(save_path, "w", encoding="utf-8-sig") as f:
                     f.write(content)
-                debug_tracer.entry("PickApi:save_file_success", f"文件成功保存至: {save_path}", {"path": save_path})
+                tracer.entry("PickApi:save_file_success", f"文件成功保存至: {save_path}", {"path": save_path})
                 return save_path
             else:
-                debug_tracer.entry("PickApi:save_file_cancelled", f"用户取消了保存文件: {filename}")
+                tracer.entry("PickApi:save_file_cancelled", f"用户取消了保存文件: {filename}")
         except Exception as e:
             try:
-                from server.debug_tracer import debug_tracer
-                debug_tracer.entry("PickApi:save_file_error", f"保存文件失败: {str(e)}", {"error": str(e)}, scope="error")
+                from server.tracer import tracer
+                tracer.entry("PickApi:save_file_error", f"保存文件失败: {str(e)}", {"error": str(e)}, scope="error")
             except Exception:
                 pass
             print(f"[PickApi] save_file error: {e}")
@@ -469,6 +467,7 @@ def _main_impl():
         x=x,
         y=y,
         min_size=(1024, 680),
+        text_select=True,
         js_api=pick_api,
     )
     pick_api._window = window

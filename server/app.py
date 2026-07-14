@@ -16,7 +16,7 @@ from src.core.cities import get_cities, refresh_from_browser
 
 
 from .session import session
-from .debug_tracer import debug_tracer
+from .tracer import tracer
 
 app = FastAPI(title="BOSS 直聘助手 GUI")
 
@@ -132,8 +132,8 @@ def api_start(params: StartParams):
 # 手动模式：用户已在浏览器里做完搜索/筛选，不在这里重复校验
     if session.running:
         return {"ok": False, "error": "已有任务在运行"}
-    trace_id = debug_tracer.start_scope("collect-start")
-    debug_tracer.entry("app.py:api_start", "分析任务启动", params.model_dump(), scope="collect-start")
+    trace_id = tracer.start_scope("collect-start")
+    tracer.entry("app.py:api_start", "分析任务启动", params.model_dump(), scope="collect-start")
     session.start(_dump(params))
     return {"ok": True}
 
@@ -223,10 +223,18 @@ async def ws_endpoint(ws: WebSocket):
 
 @app.post("/__debug_log")
 async def api_debug_log(request: Request):
-    """Vite 中间件端点：接收前端日志并写入 .cursor/debug.log + .RandP/debug.log"""
+    """Vite 中间件端点：接收前端日志并写入标准 TraceLink"""
     try:
         body = await request.json()
-        debug_tracer.internal("app.py:__debug_log", "前端日志", body)
+        layer = body.get("layer", "FE-UI")
+        fn = body.get("fn", "unknown")
+        msg = body.get("msg", "")
+        data = body.get("data", {})
+        scope = body.get("scope")
+        
+        # 真正还原前端日志的层级并转发到标准 Tracer
+        from tracelink import tracer as standard_tracer
+        standard_tracer.custom(layer, fn, msg, data, scope=scope)
     except Exception:
         pass
     return {"ok": True}
@@ -236,24 +244,26 @@ async def api_debug_log(request: Request):
 def api_debug_status():
     """返回调试追踪器状态"""
     return {
-        "enabled": debug_tracer.is_enabled(),
-        "scopes": debug_tracer.get_enabled_scopes(),
-        "active": list(debug_tracer.get_enabled_scopes()),
+        "enabled": tracer.is_enabled(),
+        "scopes": tracer.get_enabled_scopes(),
+        "active": list(tracer.get_enabled_scopes()),
     }
 
 
 @app.delete("/__debug_log")
 def api_debug_clear():
     """清空日志文件"""
-    debug_tracer.clear()
-    debug_tracer.reset_files()
+    tracer.clear()
+    tracer.reset_files()
     return {"ok": True}
 
 
 @app.get("/__debug_log")
 def api_debug_read():
     """读取日志文件内容（供调试面板使用）"""
-    log_path = debug_tracer._log_path
+    from pathlib import Path
+    project_root = Path(__file__).resolve().parents[1]
+    log_path = project_root / ".tracelink" / "trace.ndjson"
     try:
         if log_path.exists():
             with open(log_path, "r", encoding="utf-8") as f:
@@ -275,20 +285,20 @@ class EnableBody(BaseModel):
 def api_debug_set_scopes(body: ScopesBody):
     """设置启用的 Scope 列表"""
     scopes = set(body.scopes)
-    debug_tracer.enable_all_scopes()  # reset first
+    tracer.enable_all_scopes()  # reset first
     if "*" in scopes:
         pass  # all enabled
     else:
-        debug_tracer.disable_all_scopes()
+        tracer.disable_all_scopes()
         for s in scopes:
-            debug_tracer.enable_scope(s)
+            tracer.enable_scope(s)
     return {"ok": True}
 
 
 @app.post("/api/debug/enable")
 def api_debug_set_enable(body: EnableBody):
     """设置全局开关"""
-    debug_tracer.set_enabled(body.enabled)
+    tracer.set_enabled(body.enabled)
     return {"ok": True}
 
 

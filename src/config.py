@@ -6,10 +6,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 
 def _dt(fn: str, msg: str, data: dict = None, scope="config"):
-    """写入 debug_tracer 追踪日志。"""
+    """写入 tracer 追踪日志。"""
     try:
-        from server.debug_tracer import debug_tracer
-        debug_tracer.internal(f"config.py:{fn}", msg, data or {}, scope=scope)
+        from server.tracer import tracer
+        tracer.internal(f"config.py:{fn}", msg, data or {}, scope=scope)
     except Exception:
         pass
 

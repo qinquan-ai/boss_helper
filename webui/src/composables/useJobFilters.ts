@@ -1,6 +1,6 @@
 import { computed, ref, watch } from "vue";
 import { useEngine } from "@/stores/engine";
-import { trace } from "@/utils/debugTracer";
+import { tracer } from "@/utils/tracer";
 
 /**
  * 所有筛选状态与派生，集中在此处供父组件 + FilterBar 共享。
@@ -61,7 +61,7 @@ export function useJobFilters() {
   // 追踪 salaryFilter 写入
   watch(
     () => salaryFilter.value,
-    (v) => trace.api("useJobFilters:salaryFilter", `salaryFilter 写入: ${v}`, { salaryFilter: v })
+    (v) => tracer.api("useJobFilters:salaryFilter", `salaryFilter 写入: ${v}`, { salaryFilter: v })
   );
 
   const cityFilter = ref<string[]>([]);
@@ -140,7 +140,7 @@ export function useJobFilters() {
       }
       return true;
     });
-    trace.api("useJobFilters:filtered", `filtered 重算: ${raw.length} 条 (salaryFilter=${salaryFilter.value.join(",")})`, {
+    tracer.api("useJobFilters:filtered", `filtered 重算: ${raw.length} 条 (salaryFilter=${salaryFilter.value.join(",")})`, {
       salaryFilter: salaryFilter.value, totalJobs: engine.jobs.length, filteredCount: raw.length,
     });
     return raw;

@@ -6,7 +6,7 @@
 import { computed, ref } from "vue";
 import { useEngine } from "@/stores/engine";
 import { GlassSelect, GlassMultiSelect } from "@/ui";
-import { trace } from "@/utils/debugTracer";
+import { tracer } from "@/utils/tracer";
 
 
 const props = defineProps<{

@@ -5,7 +5,7 @@
  */
 import { ref, watch } from "vue";
 import { useJobFilters } from "@/composables/useJobFilters";
-import { trace } from "@/utils/debugTracer";
+import { tracer } from "@/utils/tracer";
 import FilterBar from "./FilterBar.vue";
 import JobTable from "./JobTable.vue";
 import JobDetailDrawer from "./JobDetailDrawer.vue";
@@ -18,7 +18,7 @@ const selected = ref<Job | null>(null);
 watch(
   () => f.filtered.value,
   (newFiltered) => {
-    trace.api("ResultTable:filtered", `filtered 传给 JobTable: ${newFiltered.length} 条`, {
+    tracer.api("ResultTable:filtered", `filtered 传给 JobTable: ${newFiltered.length} 条`, {
       count: newFiltered.length,
       salaryFilter: f.salaryFilter.value,
     });
@@ -28,7 +28,7 @@ watch(
 // 各 filter 事件处理（抽成函数，避免 inline 表达式 TS 类型报错）
 function onKeyword(v: string) { f.keyword.value = v; }
 function onSalaryFilter(v: string[]) {
-  trace.api("ResultTable:salary-filter", `收到 salary-filter 事件: ${v}`, {});
+  tracer.api("ResultTable:salary-filter", `收到 salary-filter 事件: ${v}`, {});
   f.salaryFilter.value = v;
 }
 function onCityFilter(v: string[]) { f.cityFilter.value = v; }

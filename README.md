@@ -94,7 +94,7 @@ boss-helper/
 ├── server/                  # FastAPI 本地后端服务
 │   ├── app.py
 │   ├── session.py
-│   └── debug_tracer.py
+│   └── tracer.py
 ├── webui/                   # Vue 3 + Vite 现代前端界面
 ├── src/
 │   ├── collector.py         # 核心分析轮询调度

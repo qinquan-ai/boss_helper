@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch, type Ref } from "vue";
 import { useEngine } from "@/stores/engine";
 import { GlassSelect, GlassTag } from "@/ui";
 import type { Job } from "@/api";
-import { trace } from "@/utils/debugTracer";
+import { tracer } from "@/utils/tracer";
 
 // ============================================================================
 // 列定义（声明式）：key 是 Job 字段；render 返回 cell 显示文本/JSX
@@ -282,7 +282,7 @@ function exportCsv() {
   const filename = (engine.currentFile || "jobs").replace(/\.json$/, "") + ".csv";
 
   // 增加极其详细的 debugtracer 追踪
-  trace.action("ResultTable:exportCsv", `导出 CSV: ${filename}`, {
+  tracer.log({ layer: "FE-ACTION", fn: "ResultTable:exportCsv", msg: `导出 CSV: ${filename}`, scope: "export-csv", data: {
     filename,
     rowsCount: rows.length,
     columns: cols.map((c) => c.title),
@@ -295,15 +295,15 @@ function exportCsv() {
       welfare: welfareFilter.value,
       tags: tagFilter.value,
     }
-  });
+  }});
 
   const pywebview = (window as any).pywebview;
   if (pywebview?.api?.save_file) {
     pywebview.api.save_file(filename, csv).then((savePath: string) => {
       if (savePath) {
-        trace.action("ResultTable:exportCsv_success", `文件已通过 App 成功保存`, { filename, savePath });
+        tracer.log({ layer: "FE-ACTION", fn: "ResultTable:exportCsv", msg: `文件已通过 App 成功保存`, data: { filename, savePath }, scope: "export-csv" });
       } else {
-        trace.action("ResultTable:exportCsv_cancelled", `用户取消了文件保存或保存失败`, { filename });
+        tracer.log({ layer: "FE-ACTION", fn: "ResultTable:exportCsv", msg: `用户取消了文件保存或保存失败`, data: { filename }, scope: "export-csv" });
       }
     });
   } else {
@@ -313,7 +313,7 @@ function exportCsv() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
-    trace.action("ResultTable:exportCsv_success", `文件已通过浏览器触发下载: ${filename}`, { filename });
+    tracer.log({ layer: "FE-ACTION", fn: "ResultTable:exportCsv", msg: `文件已通过浏览器触发下载: ${filename}`, data: { filename }, scope: "export-csv" });
   }
 }
 
