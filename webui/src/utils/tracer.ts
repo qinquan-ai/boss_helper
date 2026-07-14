@@ -5,18 +5,18 @@
  * 开发环境自动连接 Dashboard Receiver + 自动点击追踪。
  */
 import { tracer } from "tracelink";
-import { HttpSink } from "tracelink/browser";
+import { BrowserHttpExporter } from "tracelink/browser";
 
 // 开发环境：连接 Dashboard Receiver
 if (import.meta.env.DEV) {
   const receiverEndpoint = "http://127.0.0.1:5174/__debug_log";
-  const sink = new HttpSink({
+  const exporter = new BrowserHttpExporter({
     endpoint: receiverEndpoint,
     getEnabledScopes: () => tracer.getEnabledScopes(),
   });
   tracer.configure({
     enabled: true,
-    httpSink: (log) => sink.send(log),
+    httpExporter: (log) => exporter.send(log),
     scopeSync: { endpoint: `${receiverEndpoint}/scopes` },
   });
 

@@ -8,7 +8,9 @@
     "dev": ".venv\\Scripts\\python run_gui.py --dev",
     "build": "npm --prefix webui run build",
     "build:exe": ".venv\\Scripts\\python build_exe.py",
-    "sdk:refresh": "npm --prefix webui run sdk:refresh",
+    "sdk:refresh:javascript": "npm --prefix webui run sdk:refresh",
+    "sdk:refresh:python": ".venv\\Scripts\\python -m pip install -e \"../../debug_project/Trace_Link/sdks/python[fastapi]\"",
+    "sdk:refresh": "npm run sdk:refresh:javascript && npm run sdk:refresh:python",
     "dashboard": "npm --prefix webui exec -- tracelink dashboard"
   }
 }

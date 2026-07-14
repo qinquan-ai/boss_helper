@@ -83,8 +83,6 @@ def _load_env() -> dict[str, str]:
         "BOSS_DEV_BACKEND_PORT": "8848",
         "BOSS_DEV_VITE_PORT": "5173",
         "BOSS_OUTPUT_DIR": "output/",
-        "DEBUG_TRACE": "true",
-        "DEBUG_TRACE_SCOPES": "config,error",
     }
     if os.path.exists(_ENV_FILE):
         with open(_ENV_FILE, "r", encoding="utf-8") as f:

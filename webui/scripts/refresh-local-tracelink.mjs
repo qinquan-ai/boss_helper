@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -7,6 +8,7 @@ import {
   renameSync,
   rmSync,
   unlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +19,8 @@ const packageDir = join(projectDir, ".local-packages");
 const tarballPath = join(packageDir, "tracelink-dev.tgz");
 const extractionPath = join(packageDir, `.tracelink-extract-${process.pid}`);
 const installedPackagePath = join(projectDir, "node_modules", "tracelink");
+const packageLockPath = join(projectDir, "package-lock.json");
+const binDir = join(projectDir, "node_modules", ".bin");
 const npmCliPath = process.env.npm_execpath;
 
 if (!existsSync(join(sdkDir, "package.json"))) {
@@ -51,6 +55,18 @@ function removePackage(path) {
     unlinkSync(path);
   } else {
     rmSync(path, { recursive: true, force: true });
+  }
+}
+
+function invalidateInstalledPackageMetadata() {
+  if (existsSync(packageLockPath)) {
+    const lock = JSON.parse(readFileSync(packageLockPath, "utf8"));
+    if (lock.packages) delete lock.packages["node_modules/tracelink"];
+    if (lock.dependencies) delete lock.dependencies.tracelink;
+    writeFileSync(packageLockPath, `${JSON.stringify(lock, null, 2)}\n`, "utf8");
+  }
+  for (const suffix of ["", ".cmd", ".ps1"]) {
+    rmSync(join(binDir, `tracelink${suffix}`), { force: true });
   }
 }
 
@@ -103,11 +119,12 @@ try {
   extractAndValidatePackage();
 
   removePackage(installedPackagePath);
+  invalidateInstalledPackageMetadata();
   console.log("[sdk:refresh] install local tarball dependencies");
   npm(["install", "--no-audit", "--no-fund"], projectDir);
 
   removePackage(installedPackagePath);
-  renameSync(extractionPath, installedPackagePath);
+  cpSync(extractionPath, installedPackagePath, { recursive: true, force: true });
   console.log("[sdk:refresh] installed verified local package");
 } finally {
   rmSync(extractionPath, { recursive: true, force: true });

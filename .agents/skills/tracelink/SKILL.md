@@ -1,160 +1,99 @@
 ---
 name: tracelink
-description: Dev-time full-stack + AI-agent tracing (spans, outcome, level, NDJSON). Use when instrumenting code for observability, debugging a request/agent chain end-to-end, tracing what an AI agent did (which tools ran, what got blocked/skipped, how long each step took), or building a trace sender in another language.
+description: Add or inspect TraceLink dev-time tracing for requests, workflows, and AI-agent runs. Use when instrumenting spans, debugging real call chains, connecting JavaScript or Python SDKs to the local Receiver/Dashboard, propagating trace context across HTTP, controlling Scope collection, or implementing a TraceLink SDK/exporter in another language.
 ---
 
 # TraceLink
 
-TraceLink is a **dev-time tracer**: you call `tracer.log(...)` / `tracer.span(...)`
-in your code, each call becomes **one NDJSON line** persisted under `.tracelink/`
-by a local receiver, and you (the AI) read those lines back to reconstruct
-exactly what happened. Its flagship use is **watching an AI agent think and
-act**: auto-nested spans (shared `traceId` + `parentSpanId` across `await`),
-real `durationMs`/`async` per step, and explicit `outcome`s
-(`call`/`blocked`/`intent`).
+Use TraceLink to observe what actually executed. Keep instrumentation explicit,
+searchable, fail-safe, and disabled in production.
 
-## When to use this skill
+## Workflow
 
-Use it when the user asks you to:
+1. Identify the application runtimes and one authoritative Receiver endpoint.
+2. Start the Receiver/Dashboard if needed: `npx tracelink dashboard`.
+3. Select the complete SDK runtime profile:
+   - Browser: `tracelink/browser`
+   - Node: `tracelink/node`
+   - Python: `tracelink`
+4. Register an HTTP Exporter that targets the Receiver.
+5. Add spans at meaningful boundaries: user action, request entry, service call,
+   database operation, tool call, guardrail, or background task.
+6. Propagate context on business HTTP requests when crossing processes.
+7. Reproduce once, then inspect by `scope`, `traceId`, and `parentSpanId`.
+8. Run the host project's existing tests/build; tracing failures must not alter behavior.
 
-- **Add observability** — "add tracing to this module", "instrument the API".
-- **Debug a chain** — "why does delete fail?", "trace the cancel-task flow".
-- **Trace an AI agent** — "show me what the agent did", "why did it skip that tool?", "where did it get blocked?".
-- **Understand unfamiliar code** — "what happens when I click X?".
-- **Send traces from a non-JS project** — Python, or building a sender in any language.
+## JavaScript
 
-Do **not** use it when: the user only wants production logging (use
-`console.log` / stdlib `logging`); the bug is a syntax error (use a debugger); or
-you're in a production build unless tracing is explicitly disabled or removed.
-Never ship a live Receiver or secrets in trace data, and do not assume every
-tracer call will be removed automatically by tree shaking.
-
-## Install what you need
-
-```bash
-npm i tracelink                  # JS/TS sender, dashboard CLI, and Receiver
-pip install tracelink            # Python sender; add [fastapi] for middleware
-npx skills add qinquan-ai/Trace_Link   # install this skill into an agent
-```
-
-To **see** traces you also need the Receiver + Dashboard running:
-
-```bash
-npx tracelink dashboard            # in a project that has tracelink installed — instant, runs the local install
-npx tracelink@latest dashboard     # one-shot anywhere (no install) — @latest dodges npx's stale cache
-node bin/tracelink.mjs dashboard   # from a checkout of the repo
-```
-
-- Dashboard UI: `http://127.0.0.1:5174/__debug_log/ui`; ingest: `POST /__debug_log`.
-- npx resolves the **local** `node_modules/.bin` first (walking up from cwd); only
-  without a local install does it hit the registry — then `@latest` matters.
-  Port/troubleshooting details: [`references/dashboard.md`](references/dashboard.md).
-
-## Quickstart
-
-JS/TS — import the tracer, emit a log, wrap a step in a span:
+Node:
 
 ```typescript
-import { tracer } from 'tracelink';
-import 'tracelink/node'; // once: async-correct span nesting across await (Node)
+import { NodeHttpExporter, tracer } from 'tracelink/node';
 
-tracer.startScope('delete-work');
-tracer.log({ layer: 'FE-ACTION', scope: 'delete-work', fn: 'Button:onClick', msg: 'clicked delete', data: { id: 123 } });
-
-await tracer.span({ layer: 'BE-DB', fn: 'db.ts:remove', msg: 'delete row', scope: 'delete-work' }, async () => {
-  await db.remove(123); // close event carries real durationMs + async:true
+const exporter = new NodeHttpExporter({
+  endpoint: 'http://127.0.0.1:5174/__debug_log',
+  getEnabledScopes: () => tracer.getEnabledScopes(),
 });
-
-tracer.endScope('delete-work');
+tracer.addExporter(exporter.send.bind(exporter));
 ```
 
-Python — `tracer`, point it at the Dashboard, emit:
-
-```python
-from tracelink import tracer
-tracer.configure(http_endpoint="http://127.0.0.1:5174/__debug_log")
-
-tracer.start_scope('delete-work')
-tracer.entry('router.py:delete', 'user clicked delete', {'user_id': 123}, scope='delete-work')
-tracer.end_scope('delete-work')
-```
-
-To ship events to the Dashboard from the browser (not just the local sink), wire a
-sink once — `HttpSink` POSTs to `/__debug_log` by default:
+Browser:
 
 ```typescript
-import { tracer } from 'tracelink';
-import { HttpSink } from 'tracelink/browser';
-const sink = new HttpSink();
-tracer.configure({ httpSink: sink.send.bind(sink) });
+import { BrowserHttpExporter, tracer } from 'tracelink/browser';
+
+const exporter = new BrowserHttpExporter();
+tracer.addExporter(exporter.send.bind(exporter));
 ```
 
-For Node use `NodeHttpSink` from `tracelink/node` (absolute endpoint
-required). Sink/entry-point details in [`references/api.md`](references/api.md)
-and [`references/senders.md`](references/senders.md).
+Trace a boundary:
 
-## Core usage & key constraints
+```typescript
+await tracer.span({
+  layer: 'BE-ENTRY',
+  fn: 'orders.ts:create',
+  msg: 'create order',
+  scope: 'create-order',
+}, createOrder);
+```
 
-Get these right or the dashboard/consumers misbehave:
+Import `tracelink/node` for concurrent async Node work; it installs
+`AsyncLocalStorage`. Do not claim the browser stack provider gives equivalent
+arbitrary Promise-concurrency isolation.
 
-- **Field names are `fn` and `msg`** — NOT `function` / `message`. `fn` uses the
-  `"<file>:<function>"` convention so events are greppable.
-- **Every event should have a `scope`** (a named business chain), or be nested
-  inside a span that carries one — orphan events are noise. **Naming rule:**
-  `{verb}-{noun}` in kebab-case (`delete-work`, `cancel-task`) — not
-  `delete` (too generic), `cancelTask` (wrong case), or `edit_image` (snake_case).
-- **`layer` is a namespaced channel.** Built-ins: `FE-ACTION`, `FE-API`, `FE-WS`,
-  `FE-UI`, `BE-ENTRY`, `BE-INTERNAL`, `BE-DB`, `BE-WS`. Anything custom **must**
-  be `X-*` (`X-AGENT`, `X-LLM`, `X-TOOL`). Non-prefixed names are auto-prefixed
-  `X-`. Don't rename built-ins — dashboards filter by exact match.
-- **Outcome reasons go in `data.reason`** — there is NO top-level `reason` field.
-  Use `tracer.blocked(...)` for a denied/guardrailed call and `tracer.intent(...)`
-  for a wanted-but-skipped action.
-- **Spans emit two events** (open, then close). The close event is the one with
-  `durationMs`/`async`; both share one `spanId`. There is no `phase` field.
-- **Don't put secrets in `data`** (it's sanitized, but truncate tokens yourself),
-  don't log inside tight loops/frames, and don't hand-set `x-trace-id` /
-  `x-debug-scopes` headers (sinks inject them).
-- **Git Ignore Rule**: Since `.tracelink/` stores local dev-time log files (`*.ndjson`) which change with every execution, **always add `.tracelink/` to the project's `.gitignore`** to prevent committing raw log files to git history.
-- **The npm package is one package with subpaths:** core `tracelink`;
-  `/browser` (`HttpSink`, `installAutoClick`); `/node` (`NodeHttpSink`, async
-  span context — side-effect import); `/receiver/http` (`startReceiverServer`);
-  `/receiver/vite` (`debugLogPlugin`).
+## Cross-Service HTTP
 
-These constraints can also be enforced project-wide via a Cursor project rule (a
-`.cursor/rules/*.mdc` file) if the user wants — this skill does not create one.
+```typescript
+import { createTraceHeaders } from 'tracelink';
+
+fetch('/api/orders', { headers: createTraceHeaders() });
+```
+
+Use Python `create_trace_headers()` for outgoing calls and `TraceMiddleware` for
+incoming FastAPI/Starlette requests. These carry `x-trace-id`,
+`x-parent-span-id`, and `x-debug-scopes`. Do not claim TraceLink globally patches
+fetch/Axios/Requests.
+
+## Scope Control
+
+Configure the SDK against `/__debug_log/scopes`. It uses an SSE control stream:
+the Receiver sends the current policy immediately and pushes later changes.
+Do not implement periodic polling unless a target runtime cannot consume SSE.
+
+## Boundaries
+
+- The language SDK owns context and parent determination.
+- The Protocol is language-neutral.
+- The Receiver stores/streams events and owns Scope policy.
+- The Dashboard visualizes Receiver data.
+- `Sender` is only a protocol role; concrete output components are Exporters.
+- The Receiver cannot infer parents from event arrival order.
+- An unsupported language may begin with a minimal HTTP exporter, but automatic
+  nesting requires that language's native context mechanism.
 
 ## References
 
-Route to the deep detail you need (all in-directory relative links):
-
-- [`references/api.md`](references/api.md) — per-function API for JS `tracer.*`
-  and Python `tracer.*` (signatures + examples; camelCase vs snake_case;
-  what exists in one language but not the other).
-- [`references/wire-schema.md`](references/wire-schema.md) — the `TraceLog` data
-  contract: full field list, `traceId`/`spanId`/`parentSpanId` propagation,
-  layer normalization, `outcome`/`level` semantics, span open/close lifecycle.
-- [`references/dashboard.md`](references/dashboard.md) — how the Dashboard works,
-  every receiver endpoint, the port model, and the `5173`/`5174` port footgun
-  (Vite stealing `5174`; `--force` is cooperative, not a kill).
-- [`references/senders.md`](references/senders.md) — the Python sender, and how
-  to build a sender in any language against the one Node receiver.
-
-Further reading (absolute GitHub URLs — safe once this skill is installed):
-the repo [qinquan-ai/Trace_Link](https://github.com/qinquan-ai/Trace_Link), the
-full wire/transport spec
-[senders/CONFORMANCE.md](https://github.com/qinquan-ai/Trace_Link/blob/main/senders/CONFORMANCE.md),
-and the runnable cross-language flagship demo
-[examples/ai-agent](https://github.com/qinquan-ai/Trace_Link/tree/main/examples/ai-agent)
-(`agent.mjs` / `agent.py`).
-
-## Self-check before finishing
-
-- [ ] `startScope`/`endScope` paired (or you used `span(...)`).
-- [ ] Every event has a `scope` (or is nested in a span that carries one).
-- [ ] `layer` is a built-in or a namespaced `X-*`.
-- [ ] `scope` is `{verb}-{noun}` kebab-case.
-- [ ] Field names are `fn`/`msg` (not `function`/`message`).
-- [ ] Outcome reasons in `data.reason`; no top-level `reason`.
-- [ ] No secrets in `data`.
-- [ ] Production build ships no live `tracer.*` calls or receiver code.
+- Read [references/api.md](references/api.md) for JavaScript/Python APIs.
+- Read [references/sdk.md](references/sdk.md) for runtime selection and new-language SDK work.
+- Read [references/wire-schema.md](references/wire-schema.md) for event and propagation semantics.
+- Read [references/dashboard.md](references/dashboard.md) for Receiver endpoints and troubleshooting.
