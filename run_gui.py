@@ -1,15 +1,12 @@
-"""桌面 GUI 入口：子线程启动 uvicorn(FastAPI)，主线程打开 pywebview 窗口。
+"""桌面 GUI / 服务器入口：子线程启动 uvicorn(FastAPI)，主线程打开 pywebview 窗口（或纯服务器模式）。
 
 用法：
-    python run_gui.py            # 根据 .env 中的 BOSS_ENV 决定 dev/prod 模式
-    python run_gui.py --dev     # 强制开发模式（忽略 .env 中的 BOSS_ENV）
-    python run_gui.py --build   # 构建前端（npm run build），并以 prod 模式运行
-    python run_gui.py --stop    # 停止所有 boss run_gui 进程，释放端口
-
-开发模式会自动探测空闲端口：
-  - 后端从 BOSS_DEV_BACKEND_PORT 起找空闲端口，写入 webui/.env.local
-  - Vite 从 BOSS_DEV_VITE_PORT 起找空闲端口，读取 .env.local 中的后端地址
-多实例并行启动时自动错开端口，互不冲突。
+    python run_gui.py                     # 根据 .env 中的 BOSS_ENV 决定 dev/prod 模式
+    python run_gui.py --dev              # 强制开发模式
+    python run_gui.py --dev --port 5175  # 指定前端端口为 5175
+    python run_gui.py --dev --no-window  # 仅启动服务，不弹客户端窗口（同 --no-open / --no-gui）
+    python run_gui.py --build            # 构建前端（npm run build），并以 prod 模式运行
+    python run_gui.py --stop             # 停止所有 boss run_gui 进程，释放端口
 """
 import argparse
 import ctypes
@@ -407,11 +404,18 @@ def _main_impl():
     parser.add_argument("--dev", action="store_true", help="强制开发模式（忽略 .env 中的 BOSS_ENV）")
     parser.add_argument("--build", action="store_true", help="构建前端（npm run build），同时以 prod 模式运行")
     parser.add_argument("--stop", action="store_true", help="停止所有 boss run_gui 进程，释放端口")
+    parser.add_argument("--port", type=int, help="指定前端/主服务端口 (Vite port)")
+    parser.add_argument("--backend-port", type=int, help="指定后端 API 端口")
+    parser.add_argument("--no-window", action="store_true", help="不打开桌面客户端窗口（纯服务器模式）")
+    parser.add_argument("--no-open", action="store_true", help="同 --no-window，不自动打开桌面客户端窗口")
+    parser.add_argument("--no-gui", action="store_true", help="同 --no-window，不自动打开桌面客户端窗口")
     args = parser.parse_args()
 
     if args.stop:
         _stop_all()
         return
+
+    no_window = args.no_window or args.no_open or args.no_gui
 
     # 判断模式：--build > --dev > .env
     is_build = args.build
@@ -420,16 +424,18 @@ def _main_impl():
     if is_build:
         _build_frontend()
         os.environ.pop("BOSS_GUI_DEV", None)
-        backend_port = int(_env("BOSS_BACKEND_PORT", "8848"))
+        backend_port = args.backend_port or int(_env("BOSS_BACKEND_PORT", "8848"))
         vite_proc = None
     elif is_dev:
         os.environ["BOSS_GUI_DEV"] = "1"
-        backend_port = _find_free_port(HOST, int(_env("BOSS_DEV_BACKEND_PORT", "8848")))
-        vite_port = _find_free_port(HOST, int(_env("BOSS_DEV_VITE_PORT", "5173")))
+        start_backend = args.backend_port or int(_env("BOSS_DEV_BACKEND_PORT", "8848"))
+        start_vite = args.port or int(_env("BOSS_DEV_VITE_PORT", "5173"))
+        backend_port = _find_free_port(HOST, start_backend)
+        vite_port = _find_free_port(HOST, start_vite)
         vite_proc = None
     else:
         os.environ.pop("BOSS_GUI_DEV", None)
-        backend_port = int(_env("BOSS_BACKEND_PORT", "8848"))
+        backend_port = args.backend_port or args.port or int(_env("BOSS_BACKEND_PORT", "8848"))
         vite_proc = None
 
     threading.Thread(target=_start_server, args=(backend_port,), daemon=True).start()
@@ -445,11 +451,33 @@ def _main_impl():
             _kill_proc_tree(vite_proc)
             return
         url = f"http://{HOST}:{vite_port}"
-        print(f"[*] dev 模式：后端 {backend_port}，Vite {vite_port}，窗口加载 {url}（HMR 已就绪）")
+        print(f"[*] dev 模式：后端 {backend_port}，Vite {vite_port}（HMR 已就绪）")
     else:
         mode = "build" if is_build else "prod"
         url = f"http://{HOST}:{backend_port}"
-        print(f"[*] {mode} 模式：后端 {backend_port}，窗口加载 {url}")
+        print(f"[*] {mode} 模式：后端 {backend_port}")
+
+    if no_window:
+        print(f"[+] 服务器模式已就绪（无桌面窗口）")
+        if is_dev:
+            print(f"    ➜  前端 Dev 地址: {url}")
+            print(f"    ➜  后端 API 地址: http://{HOST}:{backend_port}")
+        else:
+            print(f"    ➜  Web 服务地址: {url}")
+        print("    按 Ctrl+C 可停止服务...")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\n[*] 正在停止服务...")
+        finally:
+            _kill_proc_tree(vite_proc)
+            try:
+                from server.session import session
+                session.stop()
+            except Exception:
+                pass
+        return
 
     import webview
 
