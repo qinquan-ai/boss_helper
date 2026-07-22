@@ -465,30 +465,30 @@ async function confirmReset() {
         </button>
       </div>
     </div>
-  </aside>
 
-  <!-- 确认重置弹窗 -->
-  <GlassDialog
-    v-model="showResetConfirm"
-    icon="⚠️"
-    title="还原默认设置"
-    width="25rem"
-  >
-    <div class="text-sm text-fg-muted whitespace-pre-wrap leading-relaxed">
-      确定要将所有运行配置还原为默认设置吗？此操作将清空当前的岗位搜索、城市等配置。
-    </div>
-
-    <template #footer>
-      <div class="flex gap-2">
-        <GlassButton variant="ghost" size="sm" @click="showResetConfirm = false">
-          取消
-        </GlassButton>
-        <GlassButton variant="solid" size="sm" @click="confirmReset">
-          确定重置
-        </GlassButton>
+    <!-- 确认重置弹窗 -->
+    <GlassDialog
+      v-model="showResetConfirm"
+      icon="⚠️"
+      title="还原默认设置"
+      width="25rem"
+    >
+      <div class="text-sm text-fg-muted whitespace-pre-wrap leading-relaxed">
+        确定要将所有运行配置还原为默认设置吗？此操作将清空当前的岗位搜索、城市等配置。
       </div>
-    </template>
-  </GlassDialog>
+
+      <template #footer>
+        <div class="flex gap-2">
+          <GlassButton variant="ghost" size="sm" @click="showResetConfirm = false">
+            取消
+          </GlassButton>
+          <GlassButton variant="solid" size="sm" @click="confirmReset">
+            确定重置
+          </GlassButton>
+        </div>
+      </template>
+    </GlassDialog>
+  </aside>
 </template>
 
 <style scoped>

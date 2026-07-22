@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "pinia": "^2.1.7",
-    "tracelink": "file:.local-packages/tracelink-dev.tgz",
+    "tracelink": "^0.6.5",
     "vue": "^3.4.21",
     "vue-resizable-panels": "^0.0.1"
   },
